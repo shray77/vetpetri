@@ -21,6 +21,7 @@
     </div>
   </div>
   <div id="modelBadge" class="badge" title="Тесты моделей на известных кривых">модели: проверка…</div>
+  <button id="btnProj" class="btn sm" title="Крупные шрифты и контраст — для проектора в аудитории">Проектор</button>
 </header>
 
 <main class="wrap">
@@ -28,12 +29,16 @@
     <div class="dish-wrap">
       <canvas id="dish" width="960" height="600"></canvas>
       <div id="hint" class="hint">Пресет «Кривая роста» — жми «пуск». Инструменты: посев / капля АБ / стереть.</div>
+      <div id="probe" class="probe"></div>
     </div>
 
     <div class="toolbar">
       <button id="btnPlay" class="btn primary">▶ Пуск</button>
       <button id="btnStep" class="btn">Шаг +1 ч</button>
       <button id="btnReset" class="btn">Сброс</button>
+      <button id="btnCSV" class="btn sm" title="Скачать историю (КОЕ, среда) как CSV — для отчёта по лабе">CSV</button>
+      <button id="btnPNG" class="btn sm" title="Скачать чашу как PNG">PNG</button>
+      <button id="btnShare" class="btn sm" title="Скопировать ссылку с настройками сценария — в методичку">Ссылка-сценарий</button>
       <span class="tb-sep"></span>
       <span class="tb-label">Скорость:</span>
       <select id="selSpeed" class="sel">
@@ -70,9 +75,10 @@
     <div class="presets">
       <button class="pbtn active" data-p="0">1 · Кривая роста</button>
       <button class="pbtn" data-p="1">2 · Конкуренция видов</button>
-      <button class="pbtn" data-p="2">3 · Time-kill: одна доза</button>
+      <button class="pbtn" data-p="2">3 · Time-kill: режим введения</button>
       <button class="pbtn" data-p="3">4 · Окно селекции мутантов</button>
       <button class="pbtn" data-p="4">5 · Песочница</button>
+      <button class="pbtn" data-p="5">6 · Мега-чаша: лестница доз</button>
     </div>
     <div id="presetNote" class="preset-note"></div>
 
@@ -83,6 +89,13 @@
     </div>
     <div class="dose-zones"><span class="z z1">рост</span><span class="z z2">окно селекции</span><span class="z z3">подавление</span></div>
     <div class="dose-scale"><span>0.1</span><span id="micTick">MIC 4</span><span id="mpcTick">MPC 32</span><span>256</span></div>
+    <div class="kv"><label>Режим введения <span class="muted">(пресет 3)</span></label>
+      <select id="doseMode" class="sel">
+        <option value="bolus">1 болюс</option>
+        <option value="q8h">3 введения (q8h)</option>
+        <option value="infusion">инфузия 24 ч</option>
+      </select></div>
+    <div id="pkBadge" class="pk-badge" style="display:none"></div>
     <div class="kv"><label>t½ в хозяине, ч</label><input id="kel" type="number" value="1.0" min="0" step="0.1"></div>
     <div class="kv"><label>Мутации p на деление</label>
       <select id="pMut" class="sel">
@@ -100,7 +113,7 @@
     <div class="kv"><label>Seed (воспроизводимость)</label><span class="inline"><input id="seed" type="number" value="42" step="1"><button id="btnSeedRnd" class="btn sm">случайный</button></span></div>
 
     <details id="testsBox" class="box">
-      <summary>Тесты моделей (S-кривая · time-kill · seed · окно селекции)</summary>
+      <summary>Тесты моделей (S-кривая · time-kill · seed · окно селекции · PK-инфузия · мега-чаша · экспорт)</summary>
       <button id="btnTests" class="btn">Прогнать заново</button>
       <div id="testsOut"></div>
     </details>
@@ -113,6 +126,8 @@
         <li><b>Time-kill, Хилл/Emax</b>: Regoes R.R. et al. (2004) <i>PLoS Biol</i> 2:e230; Nielsen E.I., Friberg L.E. (2006) <i>Antimicrob Agents Chemother</i> (semimechanistic PK/PD); Foerster S. et al. (2016) <i>BMC Microbiol</i> 16:167. β-лактамы: kmax ≈ 2–4 ч⁻¹, H ≈ 1–1.5 (порядок величины).</li>
         <li><b>MIC</b>: CLSI M100/VET01S, EUCAST — амоксициллин против E. coli WT: ECOFF ≤ 8 мг/л (здесь 4 — типичный WT); Pasteurella: S ≤ 0.5 (ампициллин, CLSI vet); Salmonella: прокси по ампициллину (S ≤ 8).</li>
         <li><b>Окно селекции/MPC</b>: Drlica K., Zhao X. (2003) <i>J Antimicrob Chemother</i> 52:11; Drlica K. (2007) <i>Clin Infect Dis</i> 45:S129. MPC ≈ 4–8×MIC (для β-лактамов — оценка, взято 8×).</li>
+        <li><b>Мега-чаша (лестница доз)</b>: Baym M. et al. (2016) Spatiotemporal microbial evolution on antibiotic landscapes. <i>Science</i> 353:1147 — полосы 0→1→10→100 мкг/мл; видео и уроки: HHMI BioInteractive «Giant Petri Dish».</li>
+        <li><b>fT&gt;MIC и режим введения</b>: Berry A.V. et al. (2022) Pharmacodynamic Thresholds for Beta-Lactam Antibiotics. <i>Clin Pharmacokinet</i> — цели fT&gt;MIC 40–70%; Tilanus A. et al. (2023) <i>J Antimicrob Chemother</i> 78:2165 — болюс vs пролонгированная инфузия.</li>
         <li><b>PK амоксициллина у КРС</b>: Kreil V.E. et al. (2012) <i>Comp Immunol Microbiol Infect Dis</i> — t½ ≈ 0.86 ± 0.3 ч (натриевая соль, IM); здесь t½ = 1 ч.</li>
         <li><b>Цена резистентности</b>: β-лактамаза TEM-тип, MIC ≥ 64 мг/л; фитнес-цена −10% μmax (типичные оценки 1–15%).</li>
         <li><b>Открытые системы для углубления</b>: COMETS (github.com/COMETS-bio/COMETS) — пространственные метаболические модели; gro (github.com/runhel/gro); CellModeller. ВетПетри — их сильно упрощённый кубический родственник для пары.</li>

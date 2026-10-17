@@ -9,10 +9,15 @@
  *      (аналог Лотки–Вольтерры с общим ресурсом)
  *   4) антибиотик: диффузия + элиминация (kel), гибель по Хиллу/Emax (Regoes 2004 /
  *      Nielsen & Friberg 2006); C50 автокалибруется так, чтобы net-рост = 0 при A = MIC
+ *      PK-режимы введения (одна суточная доза): болюс / 3 введения (q8h) / инфузия 24 ч
+ *      — dose fractionation, цель для β-лактамов fT>MIC 40–70% (Berry 2022)
+ *   4b) статические зоны АБ («мега-чаша», Baym 2016): полосы 0 → 1× → 10× → 100× MICwt
  *   5) мутации: поток wt→res при делении (p_mut на деление, демо-значение)
  *
  * Вход: параметры + seed (mulberry32). Выход: состояние (typed arrays) + статистика.
  * Фиксированный seed + фиксированный порядок обхода => воспроизводимый запуск.
+ * Все новые слои (dosing, abZones) детерминированы: НЕ трогают поток rng() —
+ * хэш прогона старых сценариев не меняется (проверено скриптом scripts/rng_check.js).
  *
  * Единицы: время — часы; S — мг/л (глюкоза, усл.); A — мг/л; N — КОЕ на ячейку сетки.
  * Ячейка сетки ~0.25 мм; локальная ёмкость Nmax = 1e8 КОЕ (калибровка, см. README).
@@ -125,8 +130,26 @@
       _rng: null, _tmpS: new Float32Array(n), _tmpA: new Float32Array(n),
       _wellMixed: !!cfg.wellMixed, // 0D-режим для тестов time-kill (без диффузии)
       mask: null, // 1 = внутри чашки (для обнуления N вне чашки после дисперсии)
+      // PK-режим введения (v1.1): 'bolus' | 'q8h' | 'infusion'; dose — суточная доза, мг/л
+      dosing: { mode: (cfg.dosing && cfg.dosing.mode) || 'bolus', dose: (cfg.dosing && cfg.dosing.dose) || 0 },
+      _nextDoseT: 8, // время следующего долива в режиме q8h (болюсы в 0, 8, 16 ч)
     };
     st._rng = mulberry32(st.seed);
+    // статические полосы АБ («мега-чаша», Baym 2016): доли диаметра чашки [f0..f1]
+    if (cfg.abZones && cfg.abZones.length) {
+      const mic0 = Math.max(0.01, species[0].MIC);
+      st.abZones = cfg.abZones.map(function (z) { return { f0: z.f0, f1: z.f1, conc: (z.mult || 0) * mic0 }; });
+      st._zoneCol = new Float32Array(W); // концентрация по колонкам — детерминированный ландшафт
+      for (let x = 0; x < W; x++) {
+        const f = (x - (st.cx - st.R)) / (2 * st.R);
+        let c = 0;
+        for (let z = 0; z < st.abZones.length; z++) {
+          const zn = st.abZones[z];
+          if (f >= zn.f0 && (f < zn.f1 || (zn.f1 >= 1 && f <= 1.05))) { c = zn.conc; break; }
+        }
+        st._zoneCol[x] = c;
+      }
+    } else { st.abZones = null; st._zoneCol = null; }
     // среда: субстрат везде в чашке, вне чашки — 0
     st.mask = new Uint8Array(n);
     for (let y = 0; y < H; y++) {
@@ -135,6 +158,8 @@
         const ins = inside(st, x, y);
         st.mask[i] = ins ? 1 : 0;
         st.S[i] = ins ? env.S0 : 0;
+        // в мега-чаше антибиотик уже в агаре в момент посева (детерминированно, без rng)
+        st.A[i] = (st.abZones && ins) ? st._zoneCol[x] : 0;
       }
     }
     return st;
@@ -179,6 +204,28 @@
     for (let i = 0; i < st.n; i++) if (st.S[i] > 0) st.N[s][i] += per;
   }
 
+  // полосной газон: равномерный засев вертикальной полосы x∈[fx0..fx1] (доли диаметра)
+  function lawnStrip(st, s, fx0, fx1, totalCfu) {
+    const x0 = st.cx - st.R + fx0 * 2 * st.R, x1 = st.cx - st.R + fx1 * 2 * st.R;
+    let cells = 0;
+    for (let y = 0; y < st.H; y++)
+      for (let x = Math.max(0, Math.ceil(x0 - 0.5)); x <= Math.min(st.W - 1, Math.floor(x1 + 0.5)); x++)
+        if (st.mask[y * st.W + x]) cells++;
+    if (!cells) return;
+    const per = totalCfu / cells;
+    for (let y = 0; y < st.H; y++)
+      for (let x = Math.max(0, Math.ceil(x0 - 0.5)); x <= Math.min(st.W - 1, Math.floor(x1 + 0.5)); x++)
+        if (st.mask[y * st.W + x]) st.N[s][y * st.W + x] += per;
+  }
+
+  // начальное внесение дозы по PK-режиму (вызывается из setup пресета)
+  function initDose(st) {
+    if (st.abZones) return; // в мега-чаше концентрации задают полосы
+    if (st.dosing.mode === 'bolus') bolusAB(st, st.dosing.dose);
+    else if (st.dosing.mode === 'q8h') bolusAB(st, st.dosing.dose / 3); // первая из трёх
+    // infusion: поток добавляется в step() (rate = dose/24)
+  }
+
   // капля антибиотика (гаусс), total — мг/л в пике (нормируем на пик)
   function dropAB(st, x, y, peak, r) {
     const r2 = r * r;
@@ -221,17 +268,44 @@
     const env = st.env, W = st.W, H = st.H, n = st.n;
     const rng = st._rng;
 
-    // 1) диффузия субстрата и антибиотика
+    // 1) диффузия субстрата и антибиотика (в мега-чаше A статичен — диффузия/элиминация не нужны)
     if (!st._wellMixed) {
       const subS = Math.max(1, Math.ceil(env.DS * dt / 0.11));
-      const subA = Math.max(1, Math.ceil(env.DA * dt / 0.11));
       diffuse(st.S, st._tmpS, W, H, env.DS, dt, subS);
-      diffuse(st.A, st._tmpA, W, H, env.DA, dt, subA);
+      if (!st.abZones) {
+        const subA = Math.max(1, Math.ceil(env.DA * dt / 0.11));
+        diffuse(st.A, st._tmpA, W, H, env.DA, dt, subA);
+      }
     }
 
-    // 2) элиминация антибиотика (первый порядок)
-    const dec = Math.exp(-env.kel * dt);
-    if (env.kel > 0) for (let i = 0; i < n; i++) st.A[i] *= dec;
+    // 2) антибиотик: статические полосы (Baym 2016) ИЛИ PK: q8h-доливы + элиминация/инфузия
+    if (st.abZones) {
+      const zc = st._zoneCol;
+      for (let y = 0; y < H; y++) {
+        const row = y * W;
+        for (let x = 0; x < W; x++) st.A[row + x] = st.mask[row + x] ? zc[x] : 0;
+      }
+    } else {
+      if (st.dosing.mode === 'q8h' && st.t + 1e-6 >= st._nextDoseT) {
+        bolusAB(st, st.dosing.dose / 3); // та же суточная доза, но тремя болюсами
+        st._nextDoseT += 8;
+      }
+      const dec = Math.exp(-env.kel * dt);
+      if (st.dosing.mode === 'infusion') {
+        // dA/dt = rate − kel·A; rate = суточная доза / 24 → A_ss = rate/kel.
+        // ВАЖНО: льём только внутрь чашки (по mask) — иначе stats() завышает среднее
+        // в n/area раз (грабля v1.1, поймана тестом Т5).
+        const rate = st.dosing.dose / 24;
+        if (env.kel > 0) {
+          const add = rate / env.kel * (1 - dec);
+          for (let i = 0; i < n; i++) st.A[i] = st.mask[i] ? st.A[i] * dec + add : 0;
+        } else {
+          for (let i = 0; i < n; i++) if (st.mask[i]) st.A[i] += rate * dt; // t½→∞: честный линейный подъём
+        }
+      } else if (env.kel > 0) {
+        for (let i = 0; i < n; i++) st.A[i] *= dec;
+      }
+    }
 
     // 3) среднее по чашке (для глобального q — упрощение Бараньи, помечено в README)
     let sSum = 0, area = 0;
@@ -335,6 +409,31 @@
     return h.toString(16);
   }
 
+  // ---------- экспорт данных и URL-hash (чистые функции, тестируются в node) ----------
+  function buildCSV(history) {
+    const names = ['eco', 'sdu', 'pmu', 'ecor'];
+    const head = ['t_h', 'S_mg_l', 'A_mg_l'].concat(names.map(function (n) { return 'N_' + n; })).join(';');
+    const rows = history.map(function (p) {
+      return [p.t.toFixed(2), p.S.toPrecision(6), p.A.toPrecision(6)]
+        .concat(p.tot.map(function (v) { return v.toExponential(5); })).join(';');
+    });
+    return [head].concat(rows).join('\n');
+  }
+
+  function serializeParams(obj) {
+    return Object.keys(obj).map(function (k) { return k + '=' + encodeURIComponent(obj[k]); }).join('&');
+  }
+
+  function parseParams(s) {
+    const out = {};
+    if (!s) return out;
+    s.replace(/^#/, '').split('&').forEach(function (kv) {
+      const i = kv.indexOf('=');
+      if (i > 0) out[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1));
+    });
+    return out;
+  }
+
   return {
     mulberry32: mulberry32,
     SPECIES: SPECIES_DEFAULTS,
@@ -345,10 +444,15 @@
     inside: inside,
     inoculate: inoculate,
     lawn: lawn,
+    lawnStrip: lawnStrip,
     dropAB: dropAB,
     bolusAB: bolusAB,
+    initDose: initDose,
     step: step,
     stats: stats,
     hashState: hashState,
+    buildCSV: buildCSV,
+    serializeParams: serializeParams,
+    parseParams: parseParams,
   };
 });

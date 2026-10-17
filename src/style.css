@@ -113,3 +113,47 @@ input[type=range] { width: 100%; accent-color: var(--violet); }
   .panel { max-height: none; }
   .clock { margin-left: 0; }
 }
+
+/* ---------- v1.1: probe, PK-бейдж, лекционные сценарии, проектор ---------- */
+.probe { position: absolute; display: none; pointer-events: none; z-index: 5;
+  background: rgba(8,12,18,.93); border: 1px solid var(--line); border-radius: 8px;
+  padding: 6px 9px; font-size: 12px; line-height: 1.5; white-space: nowrap; }
+.probe .sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 3px; }
+#doseMode { width: auto !important; min-width: 140px; }
+.pk-badge { font-size: 12px; padding: 4px 10px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--panel2); margin: 4px 0; }
+.pk-badge.ok { color: var(--ok); border-color: #2b5c38; }
+.pk-badge.bad { color: var(--bad); border-color: #6b2b3e; }
+details.lecture { margin-top: 8px; border-top: 1px dashed var(--line); padding-top: 6px; }
+details.lecture summary { cursor: pointer; color: var(--acc); font-size: 12.5px; }
+details.lecture ol { margin: 6px 0 4px; padding-left: 18px; font-size: 12.5px; }
+details.lecture li { margin-bottom: 3px; }
+details.lecture .lq, details.lecture .la { font-size: 12.5px; margin-top: 4px; }
+details.lecture .la { color: var(--ok); }
+
+/* проектор: крупные шрифты + контраст (PhET-style legibility) */
+body.projector { --mut: #9db1cc; --tx: #eef5fc; }
+body.projector .hdr h1 { font-size: 27px; }
+body.projector .tagline { font-size: 15px; }
+body.projector .badge { font-size: 15px; }
+body.projector .btn { font-size: 16px; padding: 8px 18px; }
+body.projector .btn.sm { font-size: 14px; padding: 5px 12px; }
+body.projector .sel, body.projector .kv input[type=number] { font-size: 15px; }
+body.projector .pbtn { font-size: 15px; }
+body.projector .preset-note, body.projector .chart-cap { font-size: 14.5px; }
+body.projector #legend .lg { font-size: 14.5px; }
+body.projector .kv label { font-size: 14.5px; }
+body.projector .sp-name { font-size: 15px; }
+body.projector .clock { font-size: 18px; }
+body.projector .hint, body.projector .probe { font-size: 14px; }
+body.projector .tb-label { font-size: 14px; }
+body.projector .tool { font-size: 15px; }
+body.projector .dose-read { font-size: 15px; }
+body.projector .disclaimer { font-size: 13px; }
+body.projector .t-name { font-size: 13.5px; }
+body.projector .t-det { font-size: 12.5px; }
+body.projector details.lecture summary,
+body.projector details.lecture ol,
+body.projector details.lecture .lq,
+body.projector details.lecture .la { font-size: 14.5px; }
+body.projector .pk-badge { font-size: 14px; }

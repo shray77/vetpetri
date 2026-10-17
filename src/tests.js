@@ -118,8 +118,107 @@
     };
   }
 
+  // Т5. PK-режимы введения (dose fractionation): инфузия той же суточной дозой
+  //     выходит на стационар A_ss = rate/kel и держит его (±10%); T>MIC (с 6 ч) = 100%;
+  //     болюс той же дозы держит A>MIC заметно меньше (в деталях).
+  function testInfusion() {
+    const kel = 0.69, Ass = 6;             // цель: стационар 6 мг/л (1.5×MICwt)
+    const D = Ass * 24 * kel;              // суточная доза → rate/kel = Ass
+    function run(mode) {
+      const st = mk({ seed: 5, enabled: [true, false, false, false],
+        dosing: { mode: mode, dose: D }, env: { noise: 0, kel: kel } });
+      E.lawn(st, 0, 1e6);
+      E.initDose(st); // вносим дозу по режиму (болюс/первая доза q8h; инфузия — потоком в step)
+      let above = 0, n = 0, minA = 1e9, maxA = -1, aboveAll = 0, nAll = 0;
+      while (st.t < 24) {
+        E.step(st, 0.05);
+        const s = E.stats(st);
+        nAll++; if (s.A > st.species[0].MIC) aboveAll++;
+        if (st.t >= 12) { minA = Math.min(minA, s.A); maxA = Math.max(maxA, s.A); }
+        if (st.t >= 6) { n++; if (s.A > st.species[0].MIC) above++; }
+      }
+      return { tmic: above / n, minA: minA, maxA: maxA, tmicAll: aboveAll / nAll };
+    }
+    const inf = run('infusion'), bol = run('bolus');
+    const steadyOk = inf.minA > Ass * 0.9 && inf.maxA < Ass * 1.1;
+    return {
+      name: 'PK-режимы: инфузия держит A≈A_ss (±10%) и T>MIC=100% (с 6 ч); болюс — вдвое-втрое меньше',
+      pass: steadyOk && inf.tmic === 1 && bol.tmic < 0.5,
+      details: 'инфузия D=' + D.toFixed(0) + ' мг/л: A(12–24 ч) ' + inf.minA.toFixed(2) + '–' + inf.maxA.toFixed(2) +
+        ', T>MIC ' + (inf.tmicAll * 100).toFixed(0) + '% всех суток (100% после выхода на плато); болюс той же дозы: T>MIC ' +
+        (bol.tmicAll * 100).toFixed(0) + '%',
+    };
+  }
+
+  // Т6. Мега-чаша (Baym 2016, Science): полосы 0 → 1× → 10× → 100× MIC.
+  //     R-клон прорывает полосу 1×MIC (появляется и растёт в полосе 10×) за ≤36 ч;
+  //     wt за 72 ч не пересекает полосу 10× (в полосе 100× его нет).
+  function testMegaPlate() {
+    function zoneCount(st, sp, f0, f1) {
+      const x0 = st.cx - st.R + f0 * 2 * st.R, x1 = st.cx - st.R + f1 * 2 * st.R;
+      const N = st.N[sp]; let sum = 0;
+      for (let y = 0; y < st.H; y++)
+        for (let x = Math.max(0, Math.ceil(x0 - 0.5)); x <= Math.min(st.W - 1, Math.floor(x1 + 0.5)); x++) {
+          const f = (x - (st.cx - st.R)) / (2 * st.R);
+          if (f >= f0 && (f < f1 || (f1 >= 1 && f <= 1.05))) sum += N[y * st.W + x];
+        }
+      return sum;
+    }
+    function run(seed) {
+      const st = mk({ W: 64, H: 24, seed: seed, wellMixed: false,
+        enabled: [true, false, false, true], env: { noise: 0, kel: 0, pMut: 1e-6 },
+        abZones: [{ f0: 0, f1: 0.25, mult: 0 }, { f0: 0.25, f1: 0.5, mult: 1 },
+                  { f0: 0.5, f1: 0.75, mult: 10 }, { f0: 0.75, f1: 1, mult: 100 }] });
+      E.lawnStrip(st, 0, 0, 0.24, 2e6);                          // газон wt в нулевой зоне
+      E.inoculate(st, 3, st.cx - st.R * 0.8, st.cy, 1e4, 2);     // R-клон слева
+      let crossT = null, wtHi = 0;
+      while (st.t < 72) {
+        E.step(st, 0.05);
+        if (Math.abs(st.t / 2 - Math.round(st.t / 2)) < 1e-9) {  // каждые 2 ч
+          if (crossT === null && zoneCount(st, 3, 0.5, 0.75) > 1e3) crossT = st.t;
+          wtHi = zoneCount(st, 0, 0.75, 1);
+        }
+      }
+      return { crossT: crossT, wtHi: wtHi };
+    }
+    const seeds = [42, 43, 44];
+    const runs = seeds.map(run);
+    const ok = runs.every(function (r) { return r.crossT !== null && r.crossT <= 36 && r.wtHi < 100; });
+    return {
+      name: 'Мега-чаша (Baym 2016): R прорывает 1×MIC за ≤36 ч; wt не берёт 10×MIC за 72 ч',
+      pass: ok,
+      details: runs.map(function (r, i) {
+        return 'seed ' + seeds[i] + ': R в зоне 10× на ' + (r.crossT === null ? '—' : r.crossT.toFixed(0) + ' ч') +
+          ', wt в зоне 100×: ' + r.wtHi.toFixed(0) + ' КОЕ';
+      }).join('; '),
+    };
+  }
+
+  // Т7. Экспорт CSV и hash-шаринг: buildCSV даёт заголовок+строки;
+  //     serializeParams∘parseParams — обратимая сериализация сценария.
+  function testExportHash() {
+    const hist = [
+      { t: 0, tot: [1e6, 0, 0, 1e4], S: 1000, A: 8 },
+      { t: 0.5, tot: [2e6, 1.2e2, 0, 2.5e4], S: 940.5, A: 5.31 },
+    ];
+    const csv = E.buildCSV(hist);
+    const lines = csv.split('\n');
+    const csvOk = lines.length === 3 && lines[0].indexOf('t_h') === 0 &&
+      lines[0].indexOf('N_ecor') > 0 && lines[1].indexOf('1.00000e+6') > 0;
+    const params = { p: '2', seed: '777', dose: '18', kel: '1.0', pMut: '1e-6',
+      S0: '1000', en: '1001', mu: '2.1,1.4,1,1.9', mic: '4,4,0.25,64', mode: 'infusion' };
+    const rt = E.parseParams(E.serializeParams(params));
+    const hashOk = JSON.stringify(rt) === JSON.stringify(params) &&
+      E.parseParams(E.serializeParams({ a: 'x y&z' })).a === 'x y&z';
+    return {
+      name: 'Экспорт CSV (заголовок+строки) и hash-шаринг (round-trip сценария)',
+      pass: csvOk && hashOk,
+      details: 'CSV: ' + lines.length + ' строк, заголовок «' + lines[0] + '»; hash round-trip: ' + (hashOk ? 'ок' : 'FAIL'),
+    };
+  }
+
   function runAll() {
-    const tests = [testGrowth, testTimeKill, testSeed, testSelectionWindow];
+    const tests = [testGrowth, testTimeKill, testSeed, testSelectionWindow, testInfusion, testMegaPlate, testExportHash];
     return tests.map(function (f) {
       try { return f(); }
       catch (e) { return { name: f.name, pass: false, details: 'ошибка: ' + e.message }; }

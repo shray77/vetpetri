@@ -124,6 +124,50 @@ input[type=range] { width: 100%; accent-color: var(--violet); }
   .clock { margin-left: 0; }
 }
 
+/* ---------- v1.1: probe, PK-бейдж, лекционные сценарии, проектор ---------- */
+.probe { position: absolute; display: none; pointer-events: none; z-index: 5;
+  background: rgba(8,12,18,.93); border: 1px solid var(--line); border-radius: 8px;
+  padding: 6px 9px; font-size: 12px; line-height: 1.5; white-space: nowrap; }
+.probe .sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 3px; }
+#doseMode { width: auto !important; min-width: 140px; }
+.pk-badge { font-size: 12px; padding: 4px 10px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--panel2); margin: 4px 0; }
+.pk-badge.ok { color: var(--ok); border-color: #2b5c38; }
+.pk-badge.bad { color: var(--bad); border-color: #6b2b3e; }
+details.lecture { margin-top: 8px; border-top: 1px dashed var(--line); padding-top: 6px; }
+details.lecture summary { cursor: pointer; color: var(--acc); font-size: 12.5px; }
+details.lecture ol { margin: 6px 0 4px; padding-left: 18px; font-size: 12.5px; }
+details.lecture li { margin-bottom: 3px; }
+details.lecture .lq, details.lecture .la { font-size: 12.5px; margin-top: 4px; }
+details.lecture .la { color: var(--ok); }
+
+/* проектор: крупные шрифты + контраст (PhET-style legibility) */
+body.projector { --mut: #9db1cc; --tx: #eef5fc; }
+body.projector .hdr h1 { font-size: 27px; }
+body.projector .tagline { font-size: 15px; }
+body.projector .badge { font-size: 15px; }
+body.projector .btn { font-size: 16px; padding: 8px 18px; }
+body.projector .btn.sm { font-size: 14px; padding: 5px 12px; }
+body.projector .sel, body.projector .kv input[type=number] { font-size: 15px; }
+body.projector .pbtn { font-size: 15px; }
+body.projector .preset-note, body.projector .chart-cap { font-size: 14.5px; }
+body.projector #legend .lg { font-size: 14.5px; }
+body.projector .kv label { font-size: 14.5px; }
+body.projector .sp-name { font-size: 15px; }
+body.projector .clock { font-size: 18px; }
+body.projector .hint, body.projector .probe { font-size: 14px; }
+body.projector .tb-label { font-size: 14px; }
+body.projector .tool { font-size: 15px; }
+body.projector .dose-read { font-size: 15px; }
+body.projector .disclaimer { font-size: 13px; }
+body.projector .t-name { font-size: 13.5px; }
+body.projector .t-det { font-size: 12.5px; }
+body.projector details.lecture summary,
+body.projector details.lecture ol,
+body.projector details.lecture .lq,
+body.projector details.lecture .la { font-size: 14.5px; }
+body.projector .pk-badge { font-size: 14px; }
+
 </style>
 </head>
 <body>
@@ -136,6 +180,7 @@ input[type=range] { width: 100%; accent-color: var(--violet); }
     </div>
   </div>
   <div id="modelBadge" class="badge" title="Тесты моделей на известных кривых">модели: проверка…</div>
+  <button id="btnProj" class="btn sm" title="Крупные шрифты и контраст — для проектора в аудитории">Проектор</button>
 </header>
 
 <main class="wrap">
@@ -143,12 +188,16 @@ input[type=range] { width: 100%; accent-color: var(--violet); }
     <div class="dish-wrap">
       <canvas id="dish" width="960" height="600"></canvas>
       <div id="hint" class="hint">Пресет «Кривая роста» — жми «пуск». Инструменты: посев / капля АБ / стереть.</div>
+      <div id="probe" class="probe"></div>
     </div>
 
     <div class="toolbar">
       <button id="btnPlay" class="btn primary">▶ Пуск</button>
       <button id="btnStep" class="btn">Шаг +1 ч</button>
       <button id="btnReset" class="btn">Сброс</button>
+      <button id="btnCSV" class="btn sm" title="Скачать историю (КОЕ, среда) как CSV — для отчёта по лабе">CSV</button>
+      <button id="btnPNG" class="btn sm" title="Скачать чашу как PNG">PNG</button>
+      <button id="btnShare" class="btn sm" title="Скопировать ссылку с настройками сценария — в методичку">Ссылка-сценарий</button>
       <span class="tb-sep"></span>
       <span class="tb-label">Скорость:</span>
       <select id="selSpeed" class="sel">
@@ -185,9 +234,10 @@ input[type=range] { width: 100%; accent-color: var(--violet); }
     <div class="presets">
       <button class="pbtn active" data-p="0">1 · Кривая роста</button>
       <button class="pbtn" data-p="1">2 · Конкуренция видов</button>
-      <button class="pbtn" data-p="2">3 · Time-kill: одна доза</button>
+      <button class="pbtn" data-p="2">3 · Time-kill: режим введения</button>
       <button class="pbtn" data-p="3">4 · Окно селекции мутантов</button>
       <button class="pbtn" data-p="4">5 · Песочница</button>
+      <button class="pbtn" data-p="5">6 · Мега-чаша: лестница доз</button>
     </div>
     <div id="presetNote" class="preset-note"></div>
 
@@ -198,6 +248,13 @@ input[type=range] { width: 100%; accent-color: var(--violet); }
     </div>
     <div class="dose-zones"><span class="z z1">рост</span><span class="z z2">окно селекции</span><span class="z z3">подавление</span></div>
     <div class="dose-scale"><span>0.1</span><span id="micTick">MIC 4</span><span id="mpcTick">MPC 32</span><span>256</span></div>
+    <div class="kv"><label>Режим введения <span class="muted">(пресет 3)</span></label>
+      <select id="doseMode" class="sel">
+        <option value="bolus">1 болюс</option>
+        <option value="q8h">3 введения (q8h)</option>
+        <option value="infusion">инфузия 24 ч</option>
+      </select></div>
+    <div id="pkBadge" class="pk-badge" style="display:none"></div>
     <div class="kv"><label>t½ в хозяине, ч</label><input id="kel" type="number" value="1.0" min="0" step="0.1"></div>
     <div class="kv"><label>Мутации p на деление</label>
       <select id="pMut" class="sel">
@@ -215,7 +272,7 @@ input[type=range] { width: 100%; accent-color: var(--violet); }
     <div class="kv"><label>Seed (воспроизводимость)</label><span class="inline"><input id="seed" type="number" value="42" step="1"><button id="btnSeedRnd" class="btn sm">случайный</button></span></div>
 
     <details id="testsBox" class="box">
-      <summary>Тесты моделей (S-кривая · time-kill · seed · окно селекции)</summary>
+      <summary>Тесты моделей (S-кривая · time-kill · seed · окно селекции · PK-инфузия · мега-чаша · экспорт)</summary>
       <button id="btnTests" class="btn">Прогнать заново</button>
       <div id="testsOut"></div>
     </details>
@@ -228,6 +285,8 @@ input[type=range] { width: 100%; accent-color: var(--violet); }
         <li><b>Time-kill, Хилл/Emax</b>: Regoes R.R. et al. (2004) <i>PLoS Biol</i> 2:e230; Nielsen E.I., Friberg L.E. (2006) <i>Antimicrob Agents Chemother</i> (semimechanistic PK/PD); Foerster S. et al. (2016) <i>BMC Microbiol</i> 16:167. β-лактамы: kmax ≈ 2–4 ч⁻¹, H ≈ 1–1.5 (порядок величины).</li>
         <li><b>MIC</b>: CLSI M100/VET01S, EUCAST — амоксициллин против E. coli WT: ECOFF ≤ 8 мг/л (здесь 4 — типичный WT); Pasteurella: S ≤ 0.5 (ампициллин, CLSI vet); Salmonella: прокси по ампициллину (S ≤ 8).</li>
         <li><b>Окно селекции/MPC</b>: Drlica K., Zhao X. (2003) <i>J Antimicrob Chemother</i> 52:11; Drlica K. (2007) <i>Clin Infect Dis</i> 45:S129. MPC ≈ 4–8×MIC (для β-лактамов — оценка, взято 8×).</li>
+        <li><b>Мега-чаша (лестница доз)</b>: Baym M. et al. (2016) Spatiotemporal microbial evolution on antibiotic landscapes. <i>Science</i> 353:1147 — полосы 0→1→10→100 мкг/мл; видео и уроки: HHMI BioInteractive «Giant Petri Dish».</li>
+        <li><b>fT&gt;MIC и режим введения</b>: Berry A.V. et al. (2022) Pharmacodynamic Thresholds for Beta-Lactam Antibiotics. <i>Clin Pharmacokinet</i> — цели fT&gt;MIC 40–70%; Tilanus A. et al. (2023) <i>J Antimicrob Chemother</i> 78:2165 — болюс vs пролонгированная инфузия.</li>
         <li><b>PK амоксициллина у КРС</b>: Kreil V.E. et al. (2012) <i>Comp Immunol Microbiol Infect Dis</i> — t½ ≈ 0.86 ± 0.3 ч (натриевая соль, IM); здесь t½ = 1 ч.</li>
         <li><b>Цена резистентности</b>: β-лактамаза TEM-тип, MIC ≥ 64 мг/л; фитнес-цена −10% μmax (типичные оценки 1–15%).</li>
         <li><b>Открытые системы для углубления</b>: COMETS (github.com/COMETS-bio/COMETS) — пространственные метаболические модели; gro (github.com/runhel/gro); CellModeller. ВетПетри — их сильно упрощённый кубический родственник для пары.</li>
@@ -259,10 +318,15 @@ input[type=range] { width: 100%; accent-color: var(--violet); }
  *      (аналог Лотки–Вольтерры с общим ресурсом)
  *   4) антибиотик: диффузия + элиминация (kel), гибель по Хиллу/Emax (Regoes 2004 /
  *      Nielsen & Friberg 2006); C50 автокалибруется так, чтобы net-рост = 0 при A = MIC
+ *      PK-режимы введения (одна суточная доза): болюс / 3 введения (q8h) / инфузия 24 ч
+ *      — dose fractionation, цель для β-лактамов fT>MIC 40–70% (Berry 2022)
+ *   4b) статические зоны АБ («мега-чаша», Baym 2016): полосы 0 → 1× → 10× → 100× MICwt
  *   5) мутации: поток wt→res при делении (p_mut на деление, демо-значение)
  *
  * Вход: параметры + seed (mulberry32). Выход: состояние (typed arrays) + статистика.
  * Фиксированный seed + фиксированный порядок обхода => воспроизводимый запуск.
+ * Все новые слои (dosing, abZones) детерминированы: НЕ трогают поток rng() —
+ * хэш прогона старых сценариев не меняется (проверено скриптом scripts/rng_check.js).
  *
  * Единицы: время — часы; S — мг/л (глюкоза, усл.); A — мг/л; N — КОЕ на ячейку сетки.
  * Ячейка сетки ~0.25 мм; локальная ёмкость Nmax = 1e8 КОЕ (калибровка, см. README).
@@ -375,8 +439,26 @@ input[type=range] { width: 100%; accent-color: var(--violet); }
       _rng: null, _tmpS: new Float32Array(n), _tmpA: new Float32Array(n),
       _wellMixed: !!cfg.wellMixed, // 0D-режим для тестов time-kill (без диффузии)
       mask: null, // 1 = внутри чашки (для обнуления N вне чашки после дисперсии)
+      // PK-режим введения (v1.1): 'bolus' | 'q8h' | 'infusion'; dose — суточная доза, мг/л
+      dosing: { mode: (cfg.dosing && cfg.dosing.mode) || 'bolus', dose: (cfg.dosing && cfg.dosing.dose) || 0 },
+      _nextDoseT: 8, // время следующего долива в режиме q8h (болюсы в 0, 8, 16 ч)
     };
     st._rng = mulberry32(st.seed);
+    // статические полосы АБ («мега-чаша», Baym 2016): доли диаметра чашки [f0..f1]
+    if (cfg.abZones && cfg.abZones.length) {
+      const mic0 = Math.max(0.01, species[0].MIC);
+      st.abZones = cfg.abZones.map(function (z) { return { f0: z.f0, f1: z.f1, conc: (z.mult || 0) * mic0 }; });
+      st._zoneCol = new Float32Array(W); // концентрация по колонкам — детерминированный ландшафт
+      for (let x = 0; x < W; x++) {
+        const f = (x - (st.cx - st.R)) / (2 * st.R);
+        let c = 0;
+        for (let z = 0; z < st.abZones.length; z++) {
+          const zn = st.abZones[z];
+          if (f >= zn.f0 && (f < zn.f1 || (zn.f1 >= 1 && f <= 1.05))) { c = zn.conc; break; }
+        }
+        st._zoneCol[x] = c;
+      }
+    } else { st.abZones = null; st._zoneCol = null; }
     // среда: субстрат везде в чашке, вне чашки — 0
     st.mask = new Uint8Array(n);
     for (let y = 0; y < H; y++) {
@@ -385,6 +467,8 @@ input[type=range] { width: 100%; accent-color: var(--violet); }
         const ins = inside(st, x, y);
         st.mask[i] = ins ? 1 : 0;
         st.S[i] = ins ? env.S0 : 0;
+        // в мега-чаше антибиотик уже в агаре в момент посева (детерминированно, без rng)
+        st.A[i] = (st.abZones && ins) ? st._zoneCol[x] : 0;
       }
     }
     return st;
@@ -429,6 +513,28 @@ input[type=range] { width: 100%; accent-color: var(--violet); }
     for (let i = 0; i < st.n; i++) if (st.S[i] > 0) st.N[s][i] += per;
   }
 
+  // полосной газон: равномерный засев вертикальной полосы x∈[fx0..fx1] (доли диаметра)
+  function lawnStrip(st, s, fx0, fx1, totalCfu) {
+    const x0 = st.cx - st.R + fx0 * 2 * st.R, x1 = st.cx - st.R + fx1 * 2 * st.R;
+    let cells = 0;
+    for (let y = 0; y < st.H; y++)
+      for (let x = Math.max(0, Math.ceil(x0 - 0.5)); x <= Math.min(st.W - 1, Math.floor(x1 + 0.5)); x++)
+        if (st.mask[y * st.W + x]) cells++;
+    if (!cells) return;
+    const per = totalCfu / cells;
+    for (let y = 0; y < st.H; y++)
+      for (let x = Math.max(0, Math.ceil(x0 - 0.5)); x <= Math.min(st.W - 1, Math.floor(x1 + 0.5)); x++)
+        if (st.mask[y * st.W + x]) st.N[s][y * st.W + x] += per;
+  }
+
+  // начальное внесение дозы по PK-режиму (вызывается из setup пресета)
+  function initDose(st) {
+    if (st.abZones) return; // в мега-чаше концентрации задают полосы
+    if (st.dosing.mode === 'bolus') bolusAB(st, st.dosing.dose);
+    else if (st.dosing.mode === 'q8h') bolusAB(st, st.dosing.dose / 3); // первая из трёх
+    // infusion: поток добавляется в step() (rate = dose/24)
+  }
+
   // капля антибиотика (гаусс), total — мг/л в пике (нормируем на пик)
   function dropAB(st, x, y, peak, r) {
     const r2 = r * r;
@@ -471,17 +577,44 @@ input[type=range] { width: 100%; accent-color: var(--violet); }
     const env = st.env, W = st.W, H = st.H, n = st.n;
     const rng = st._rng;
 
-    // 1) диффузия субстрата и антибиотика
+    // 1) диффузия субстрата и антибиотика (в мега-чаше A статичен — диффузия/элиминация не нужны)
     if (!st._wellMixed) {
       const subS = Math.max(1, Math.ceil(env.DS * dt / 0.11));
-      const subA = Math.max(1, Math.ceil(env.DA * dt / 0.11));
       diffuse(st.S, st._tmpS, W, H, env.DS, dt, subS);
-      diffuse(st.A, st._tmpA, W, H, env.DA, dt, subA);
+      if (!st.abZones) {
+        const subA = Math.max(1, Math.ceil(env.DA * dt / 0.11));
+        diffuse(st.A, st._tmpA, W, H, env.DA, dt, subA);
+      }
     }
 
-    // 2) элиминация антибиотика (первый порядок)
-    const dec = Math.exp(-env.kel * dt);
-    if (env.kel > 0) for (let i = 0; i < n; i++) st.A[i] *= dec;
+    // 2) антибиотик: статические полосы (Baym 2016) ИЛИ PK: q8h-доливы + элиминация/инфузия
+    if (st.abZones) {
+      const zc = st._zoneCol;
+      for (let y = 0; y < H; y++) {
+        const row = y * W;
+        for (let x = 0; x < W; x++) st.A[row + x] = st.mask[row + x] ? zc[x] : 0;
+      }
+    } else {
+      if (st.dosing.mode === 'q8h' && st.t + 1e-6 >= st._nextDoseT) {
+        bolusAB(st, st.dosing.dose / 3); // та же суточная доза, но тремя болюсами
+        st._nextDoseT += 8;
+      }
+      const dec = Math.exp(-env.kel * dt);
+      if (st.dosing.mode === 'infusion') {
+        // dA/dt = rate − kel·A; rate = суточная доза / 24 → A_ss = rate/kel.
+        // ВАЖНО: льём только внутрь чашки (по mask) — иначе stats() завышает среднее
+        // в n/area раз (грабля v1.1, поймана тестом Т5).
+        const rate = st.dosing.dose / 24;
+        if (env.kel > 0) {
+          const add = rate / env.kel * (1 - dec);
+          for (let i = 0; i < n; i++) st.A[i] = st.mask[i] ? st.A[i] * dec + add : 0;
+        } else {
+          for (let i = 0; i < n; i++) if (st.mask[i]) st.A[i] += rate * dt; // t½→∞: честный линейный подъём
+        }
+      } else if (env.kel > 0) {
+        for (let i = 0; i < n; i++) st.A[i] *= dec;
+      }
+    }
 
     // 3) среднее по чашке (для глобального q — упрощение Бараньи, помечено в README)
     let sSum = 0, area = 0;
@@ -585,6 +718,31 @@ input[type=range] { width: 100%; accent-color: var(--violet); }
     return h.toString(16);
   }
 
+  // ---------- экспорт данных и URL-hash (чистые функции, тестируются в node) ----------
+  function buildCSV(history) {
+    const names = ['eco', 'sdu', 'pmu', 'ecor'];
+    const head = ['t_h', 'S_mg_l', 'A_mg_l'].concat(names.map(function (n) { return 'N_' + n; })).join(';');
+    const rows = history.map(function (p) {
+      return [p.t.toFixed(2), p.S.toPrecision(6), p.A.toPrecision(6)]
+        .concat(p.tot.map(function (v) { return v.toExponential(5); })).join(';');
+    });
+    return [head].concat(rows).join('\n');
+  }
+
+  function serializeParams(obj) {
+    return Object.keys(obj).map(function (k) { return k + '=' + encodeURIComponent(obj[k]); }).join('&');
+  }
+
+  function parseParams(s) {
+    const out = {};
+    if (!s) return out;
+    s.replace(/^#/, '').split('&').forEach(function (kv) {
+      const i = kv.indexOf('=');
+      if (i > 0) out[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1));
+    });
+    return out;
+  }
+
   return {
     mulberry32: mulberry32,
     SPECIES: SPECIES_DEFAULTS,
@@ -595,11 +753,16 @@ input[type=range] { width: 100%; accent-color: var(--violet); }
     inside: inside,
     inoculate: inoculate,
     lawn: lawn,
+    lawnStrip: lawnStrip,
     dropAB: dropAB,
     bolusAB: bolusAB,
+    initDose: initDose,
     step: step,
     stats: stats,
     hashState: hashState,
+    buildCSV: buildCSV,
+    serializeParams: serializeParams,
+    parseParams: parseParams,
   };
 });
 
@@ -725,8 +888,107 @@ input[type=range] { width: 100%; accent-color: var(--violet); }
     };
   }
 
+  // Т5. PK-режимы введения (dose fractionation): инфузия той же суточной дозой
+  //     выходит на стационар A_ss = rate/kel и держит его (±10%); T>MIC (с 6 ч) = 100%;
+  //     болюс той же дозы держит A>MIC заметно меньше (в деталях).
+  function testInfusion() {
+    const kel = 0.69, Ass = 6;             // цель: стационар 6 мг/л (1.5×MICwt)
+    const D = Ass * 24 * kel;              // суточная доза → rate/kel = Ass
+    function run(mode) {
+      const st = mk({ seed: 5, enabled: [true, false, false, false],
+        dosing: { mode: mode, dose: D }, env: { noise: 0, kel: kel } });
+      E.lawn(st, 0, 1e6);
+      E.initDose(st); // вносим дозу по режиму (болюс/первая доза q8h; инфузия — потоком в step)
+      let above = 0, n = 0, minA = 1e9, maxA = -1, aboveAll = 0, nAll = 0;
+      while (st.t < 24) {
+        E.step(st, 0.05);
+        const s = E.stats(st);
+        nAll++; if (s.A > st.species[0].MIC) aboveAll++;
+        if (st.t >= 12) { minA = Math.min(minA, s.A); maxA = Math.max(maxA, s.A); }
+        if (st.t >= 6) { n++; if (s.A > st.species[0].MIC) above++; }
+      }
+      return { tmic: above / n, minA: minA, maxA: maxA, tmicAll: aboveAll / nAll };
+    }
+    const inf = run('infusion'), bol = run('bolus');
+    const steadyOk = inf.minA > Ass * 0.9 && inf.maxA < Ass * 1.1;
+    return {
+      name: 'PK-режимы: инфузия держит A≈A_ss (±10%) и T>MIC=100% (с 6 ч); болюс — вдвое-втрое меньше',
+      pass: steadyOk && inf.tmic === 1 && bol.tmic < 0.5,
+      details: 'инфузия D=' + D.toFixed(0) + ' мг/л: A(12–24 ч) ' + inf.minA.toFixed(2) + '–' + inf.maxA.toFixed(2) +
+        ', T>MIC ' + (inf.tmicAll * 100).toFixed(0) + '% всех суток (100% после выхода на плато); болюс той же дозы: T>MIC ' +
+        (bol.tmicAll * 100).toFixed(0) + '%',
+    };
+  }
+
+  // Т6. Мега-чаша (Baym 2016, Science): полосы 0 → 1× → 10× → 100× MIC.
+  //     R-клон прорывает полосу 1×MIC (появляется и растёт в полосе 10×) за ≤36 ч;
+  //     wt за 72 ч не пересекает полосу 10× (в полосе 100× его нет).
+  function testMegaPlate() {
+    function zoneCount(st, sp, f0, f1) {
+      const x0 = st.cx - st.R + f0 * 2 * st.R, x1 = st.cx - st.R + f1 * 2 * st.R;
+      const N = st.N[sp]; let sum = 0;
+      for (let y = 0; y < st.H; y++)
+        for (let x = Math.max(0, Math.ceil(x0 - 0.5)); x <= Math.min(st.W - 1, Math.floor(x1 + 0.5)); x++) {
+          const f = (x - (st.cx - st.R)) / (2 * st.R);
+          if (f >= f0 && (f < f1 || (f1 >= 1 && f <= 1.05))) sum += N[y * st.W + x];
+        }
+      return sum;
+    }
+    function run(seed) {
+      const st = mk({ W: 64, H: 24, seed: seed, wellMixed: false,
+        enabled: [true, false, false, true], env: { noise: 0, kel: 0, pMut: 1e-6 },
+        abZones: [{ f0: 0, f1: 0.25, mult: 0 }, { f0: 0.25, f1: 0.5, mult: 1 },
+                  { f0: 0.5, f1: 0.75, mult: 10 }, { f0: 0.75, f1: 1, mult: 100 }] });
+      E.lawnStrip(st, 0, 0, 0.24, 2e6);                          // газон wt в нулевой зоне
+      E.inoculate(st, 3, st.cx - st.R * 0.8, st.cy, 1e4, 2);     // R-клон слева
+      let crossT = null, wtHi = 0;
+      while (st.t < 72) {
+        E.step(st, 0.05);
+        if (Math.abs(st.t / 2 - Math.round(st.t / 2)) < 1e-9) {  // каждые 2 ч
+          if (crossT === null && zoneCount(st, 3, 0.5, 0.75) > 1e3) crossT = st.t;
+          wtHi = zoneCount(st, 0, 0.75, 1);
+        }
+      }
+      return { crossT: crossT, wtHi: wtHi };
+    }
+    const seeds = [42, 43, 44];
+    const runs = seeds.map(run);
+    const ok = runs.every(function (r) { return r.crossT !== null && r.crossT <= 36 && r.wtHi < 100; });
+    return {
+      name: 'Мега-чаша (Baym 2016): R прорывает 1×MIC за ≤36 ч; wt не берёт 10×MIC за 72 ч',
+      pass: ok,
+      details: runs.map(function (r, i) {
+        return 'seed ' + seeds[i] + ': R в зоне 10× на ' + (r.crossT === null ? '—' : r.crossT.toFixed(0) + ' ч') +
+          ', wt в зоне 100×: ' + r.wtHi.toFixed(0) + ' КОЕ';
+      }).join('; '),
+    };
+  }
+
+  // Т7. Экспорт CSV и hash-шаринг: buildCSV даёт заголовок+строки;
+  //     serializeParams∘parseParams — обратимая сериализация сценария.
+  function testExportHash() {
+    const hist = [
+      { t: 0, tot: [1e6, 0, 0, 1e4], S: 1000, A: 8 },
+      { t: 0.5, tot: [2e6, 1.2e2, 0, 2.5e4], S: 940.5, A: 5.31 },
+    ];
+    const csv = E.buildCSV(hist);
+    const lines = csv.split('\n');
+    const csvOk = lines.length === 3 && lines[0].indexOf('t_h') === 0 &&
+      lines[0].indexOf('N_ecor') > 0 && lines[1].indexOf('1.00000e+6') > 0;
+    const params = { p: '2', seed: '777', dose: '18', kel: '1.0', pMut: '1e-6',
+      S0: '1000', en: '1001', mu: '2.1,1.4,1,1.9', mic: '4,4,0.25,64', mode: 'infusion' };
+    const rt = E.parseParams(E.serializeParams(params));
+    const hashOk = JSON.stringify(rt) === JSON.stringify(params) &&
+      E.parseParams(E.serializeParams({ a: 'x y&z' })).a === 'x y&z';
+    return {
+      name: 'Экспорт CSV (заголовок+строки) и hash-шаринг (round-trip сценария)',
+      pass: csvOk && hashOk,
+      details: 'CSV: ' + lines.length + ' строк, заголовок «' + lines[0] + '»; hash round-trip: ' + (hashOk ? 'ок' : 'FAIL'),
+    };
+  }
+
   function runAll() {
-    const tests = [testGrowth, testTimeKill, testSeed, testSelectionWindow];
+    const tests = [testGrowth, testTimeKill, testSeed, testSelectionWindow, testInfusion, testMegaPlate, testExportHash];
     return tests.map(function (f) {
       try { return f(); }
       catch (e) { return { name: f.name, pass: false, details: 'ошибка: ' + e.message }; }
@@ -789,14 +1051,65 @@ input[type=range] { width: 100%; accent-color: var(--violet); }
     };
   }
 
+  // ---------- пресет «Мега-чаша»: полосы 0 → 1× → 10× → 100× MICwt (Baym 2016) ----------
+  const MEGA_ZONES = [
+    { f0: 0, f1: 0.25, mult: 0 }, { f0: 0.25, f1: 0.5, mult: 1 },
+    { f0: 0.5, f1: 0.75, mult: 10 }, { f0: 0.75, f1: 1, mult: 100 },
+  ];
+
   function buildState() {
     const species = uiSpecies();
     const enabled = species.map(function (s) { return s.enabled; });
     const s = E.createState({
       W: W, H: H, seed: (parseInt($('seed').value, 10) || 42) >>> 0,
       species: species, enabled: enabled, env: readUIEnv(),
+      dosing: { mode: $('doseMode').value, dose: doseVal() },
+      abZones: curPreset === 5 ? MEGA_ZONES : null,
     });
     return s;
+  }
+
+  // ---------- лекционные сценарии (Avida-ED style: предскажи → запусти → сравни) ----------
+  const LECTURES = [
+    { steps: ['Скорость 0.5 ч/с → «Пуск». Найди на графике три фазы: лаг (~2 ч), экспоненту (прямая в log₁₀), плато.',
+      'На нижнем графике проследи, как тает субстрат — рост идёт, пока есть еда.',
+      'После плато подними скорость до 20 ч/с и дождись отмирания.'],
+      q: 'Почему кривая останавливается, хотя бактерии никуда не исчезают?',
+      a: 'Ёмкость среды ограничена: плато ≈ Y·S₀. Кинетика Моно + логистика — как в учебнике.' },
+    { steps: ['Пуск на 8 ч/с. Найди границу между колониями E. coli (голубая) и Salmonella (оранжевая).',
+      'Открой «Виды», задай Salmonella μmax = 2.0, сбрось и запусти заново — исход сменится.',
+      'Попробуй то же с другой S₀ (меньше еды — острее конкуренция).'],
+      q: 'Кто выигрывает: тот, кто быстрее растёт, или тот, кто раньше истощает общий субстрат?',
+      a: 'Это эксплуатационная конкуренция — родственник Лотки–Вольтерры с общим ресурсом.' },
+    { steps: ['Суточная доза 32 мг/л, режим «1 болюс» → Пуск. Смотри фиолетовую кривую и бейдж T>MIC.',
+      'Сброс, та же доза в режиме «инфузия 24 ч» → сравни T>MIC и форму кривой КОЕ.',
+      'Повтори с «3 введения (q8h)» — три промежуточных пика.'],
+      q: 'У какой кривой пик выше? А у какой время выше MIC больше? Какая стратегия «лечит» для β-лактама?',
+      a: 'β-лактамы time-dependent: цель fT>MIC 40–70% (Berry 2022). Лечит не «сколько дали», а «сколько держали».' },
+    { steps: ['Запусти дозу 0.5 мг/л (ниже MIC) — растут оба.',
+      'Доза 8 мг/л (между MIC 4 и MPC 32) — wt подавлен, доля R → 100%.',
+      'Доза 256 мг/л (выше MPC мутанта) — подавлены оба.'],
+      q: 'Какая доза хуже всего для стада — низкая, средняя или очень высокая?',
+      a: 'Окно селекции MIC…MPC (Drlica): «пол-таблетки» — самый дорогой способ сэкономить.' },
+    { steps: ['Посей E. coli слева, Salmonella справа, поставь каплю АБ на границу (доза из слайдера).',
+      'Включи мутации 10⁻⁶ и понаблюдай край капли.',
+      'Ткни курсором в границу — подсказка покажет концентрацию и состав в точке.'],
+      q: 'Почему на краю капли антибиотика выросло именно кольцо резистентных?',
+      a: 'Градиент концентрации = живое окно селекции: где A между MIC и MPC — там мутант в преимуществе.' },
+    { steps: ['Скорость 20 ч/с → Пуск. Розовый (R) фронт прорывает полосу 1×MIC.',
+      'Затем он медленно ползёт через 10×MIC и стопорится на 100×MIC.',
+      'Сравни с видео HHMI «Giant Petri Dish» (Kishony lab, Baym 2016).'],
+      q: 'Почему мутант не берёт полосу 100× сразу, а «фиксируется» на каждой ступени?',
+      a: 'Ступенчатая эволюция: каждая полоса — трамплин. Недодозированная среда строит лестницу резистентности.' },
+  ];
+
+  function lectureHTML(idx) {
+    const L = LECTURES[idx];
+    if (!L) return '';
+    return '<details class="lecture"><summary>Сценарий для пары</summary><ol>' +
+      L.steps.map(function (s) { return '<li>' + s + '</li>'; }).join('') + '</ol>' +
+      '<div class="lq"><b>Вопрос:</b> ' + L.q + '</div>' +
+      '<div class="la"><b>Вывод:</b> ' + L.a + '</div></details>';
   }
 
   // ---------- пресеты-эксперименты ----------
@@ -806,7 +1119,7 @@ input[type=range] { width: 100%; accent-color: var(--violet); }
       note: '<b>Кинетика Моно на одном виде.</b> Капля E. coli в чистой чаше: лаг-фаза (~2 ч, адаптация по Бараньи) → экспонента (удвоение ~20 мин) → плато (субстрат исчерпан, выход ≈ Y·S\u2080) → медленное отмирание. На нижнем графике зелёная кривая — субстрат тает по мере роста.',
       ui: function () {
         $('sp-en-0').checked = true; $('sp-en-1').checked = false; $('sp-en-2').checked = false; $('sp-en-3').checked = false;
-        $('kel').value = 1.0; $('pMut').value = '0';
+        $('kel').value = 1.0; $('pMut').value = '0'; $('doseMode').value = 'bolus';
       },
       setup: function (s) {
         E.inoculate(s, 0, s.cx, s.cy, 1e6, 4);
@@ -817,7 +1130,7 @@ input[type=range] { width: 100%; accent-color: var(--violet); }
       note: '<b>Два вида против общего субстрата</b> (эксплуатационная конкуренция, родственник Лотки–Вольтерры с общим ресурсом). E. coli (быстрорастущий) против Salmonella Dublin. Следи за границей колоний: кто первым захватывает субстрат, тот и давит соседа.',
       ui: function () {
         $('sp-en-0').checked = true; $('sp-en-1').checked = true; $('sp-en-2').checked = false; $('sp-en-3').checked = false;
-        $('kel').value = 1.0; $('pMut').value = '0';
+        $('kel').value = 1.0; $('pMut').value = '0'; $('doseMode').value = 'bolus';
       },
       setup: function (s) {
         E.inoculate(s, 0, s.cx - s.R * 0.45, s.cy, 5e6, 4);
@@ -825,15 +1138,15 @@ input[type=range] { width: 100%; accent-color: var(--violet); }
       },
     },
     {
-      name: 'Time-kill: одна доза',
-      note: '<b>Фармакодинамика амоксициллина (Хилл/Emax).</b> Газон E. coli + болюс. Кривая КОЕ: лог-линейный спад (kmax \u2248 3 ч\u207b\u00b9), потом регроу, когда концентрация (фиолетовая) падает ниже MIC. Двигай дозу: ниже MIC — регроу сразу; сильно выше — длинное плато гибели. β-лактамы убивают делящиеся — в голодных зонах слабее.',
+      name: 'Time-kill: режим введения',
+      note: '<b>Фармакодинамика амоксициллина (Хилл/Emax) + dose fractionation.</b> Газон E. coli + суточная доза из слайдера, внесённая по выбранному режиму: «1 болюс» / «3 введения (q8h)» / «инфузия 24 ч». Кривая КОЕ: лог-линейный спад (kmax ≈ 3 ч⁻¹), потом регроу, когда концентрация (фиолетовая) падает ниже MIC. Бейдж T>MIC — доля первых суток выше MIC: для β-лактамов цель 40–70% (Berry 2022).',
       ui: function () {
         $('sp-en-0').checked = true; $('sp-en-1').checked = false; $('sp-en-2').checked = false; $('sp-en-3').checked = false;
         $('kel').value = 1.0; $('pMut').value = '0';
       },
       setup: function (s) {
         E.lawn(s, 0, 1e7);
-        E.bolusAB(s, doseVal());
+        E.initDose(s); // болюс / первая из трёх / инфузия — по селектору режима
       },
     },
     {
@@ -841,7 +1154,7 @@ input[type=range] { width: 100%; accent-color: var(--violet); }
       note: '<b>Почему «средняя доза» растит резистентность (Drlica).</b> Газон E. coli + 1% мутанта (MIC 64, цена: рост −10%). Концентрация поддерживается (t½ → ∞, «инфузия»). Доза в окне селекции (MICwt = 4 … MPC = 32): wt подавлен, мутант растёт → доля R → 100%. Доза выше MPC мутанта (256): подавлены оба. Доза ниже MIC: растут оба. Верни t½ = 1 ч — увидишь, как болюс проходит через окно и wt отрастает.',
       ui: function () {
         $('sp-en-0').checked = true; $('sp-en-1').checked = false; $('sp-en-2').checked = false; $('sp-en-3').checked = true;
-        $('kel').value = 0; $('pMut').value = '0';
+        $('kel').value = 0; $('pMut').value = '0'; $('doseMode').value = 'bolus';
       },
       setup: function (s) {
         E.lawn(s, 0, 1e7); E.lawn(s, 3, 1e5);
@@ -851,12 +1164,25 @@ input[type=range] { width: 100%; accent-color: var(--violet); }
     },
     {
       name: 'Песочница',
-      note: '<b>Свободная игра.</b> Клик по инструменту «Посев» циклически меняет вид; капля антибиотика берёт дозу из слайдера — вокруг капли возникает градиент концентраций, и на границе «рост/гибель» можно ловить окно селекции вручную. Включи мутации 10\u207b\u2076 и понаблюдай.',
+      note: '<b>Свободная игра.</b> Клик по инструменту «Посев» циклически меняет вид; капля антибиотика берёт дозу из слайдера — вокруг капли возникает градиент концентраций, и на границе «рост/гибель» можно ловить окно селекции вручную. Включи мутации 10\u207b\u2076 и понаблюдай. Курсор на чаше — подсказка «что под ним».',
       ui: function () {
         $('sp-en-0').checked = true; $('sp-en-1').checked = true; $('sp-en-2').checked = true; $('sp-en-3').checked = false;
-        $('kel').value = 1.0; $('pMut').value = '1e-6';
+        $('kel').value = 1.0; $('pMut').value = '1e-6'; $('doseMode').value = 'bolus';
       },
       setup: function (s) {},
+    },
+    {
+      name: 'Мега-чаша: лестница доз',
+      note: '<b>Эксперимент Kishony lab (Baym 2016, Science).</b> Чаша разделена на полосы антибиотика 0 → 1× → 10× → 100× MICwt. Газон E. coli по всей чаше + редкий R-клон (β-лактамаза, MIC 64) в нулевой зоне слева. wt упирается в полосу 1×MIC (net-рост = 0), мутант прорывает её, медленно идёт через 10× и стопорится на 100×. Каждая полоса — трамплин ступенчатой эволюции. Слайдер дозы здесь не действует — концентрации задают полосы.',
+      ui: function () {
+        $('sp-en-0').checked = true; $('sp-en-1').checked = false; $('sp-en-2').checked = false; $('sp-en-3').checked = true;
+        $('kel').value = 1.0; $('pMut').value = '1e-6'; $('doseMode').value = 'bolus';
+      },
+      setup: function (s) {
+        E.lawn(s, 0, 1e7);                                   // газон wt по всей чаше
+        E.inoculate(s, 3, s.cx - s.R * 0.8, s.cy, 1e4, 2);   // R-клон в нулевой зоне
+        $('selSpeed').value = '20'; speed = 20;
+      },
     },
   ];
 
@@ -869,11 +1195,32 @@ input[type=range] { width: 100%; accent-color: var(--violet); }
     $('doseX').textContent = '= ' + (x >= 10 ? x.toFixed(0) : x.toFixed(1)) + '\u00d7MICwt';
   }
 
+  // ---------- PK: бейдж T>MIC (доля первых суток выше MICwt, Berry 2022: цель 40–70%) ----------
+  function updatePKBadge() {
+    const el = $('pkBadge');
+    if (!el) return;
+    if (curPreset !== 2 || !st || !history.length) { el.style.display = 'none'; return; }
+    const mic = st.species[0].MIC;
+    let above = 0, n = 0;
+    for (let k = 0; k < history.length; k++) {
+      if (history[k].t > 24.001) continue; // первые сутки
+      n++;
+      if (history[k].A > mic) above++;
+    }
+    if (!n) { el.style.display = 'none'; return; }
+    const f = above / n, modeName = $('doseMode').value;
+    el.style.display = '';
+    el.textContent = 'T>MIC (0–24 ч): ' + (f * 100).toFixed(0) + '% [' +
+      (modeName === 'bolus' ? '1 болюс' : modeName === 'q8h' ? '3 введения' : 'инфузия') +
+      '] · цель для β-лактамов 40–70%';
+    el.className = 'pk-badge ' + (f >= 0.4 ? 'ok' : 'bad');
+  }
+
   // ---------- сброс/пуск ----------
   function applyPreset(idx) {
     curPreset = idx;
     document.querySelectorAll('.pbtn').forEach(function (b) { b.classList.toggle('active', +b.dataset.p === idx); });
-    $('presetNote').innerHTML = PRESETS[idx].note;
+    $('presetNote').innerHTML = PRESETS[idx].note + lectureHTML(idx);
     if (PRESETS[idx].ui) PRESETS[idx].ui(); // сначала UI-поля, потом buildState их прочитает
     resetSim();
   }
@@ -888,6 +1235,7 @@ input[type=range] { width: 100%; accent-color: var(--violet); }
     drawCharts();
     updateLegend();
     updateClock();
+    updatePKBadge();
   }
 
   function pushHistory(force) {
@@ -982,10 +1330,11 @@ input[type=range] { width: 100%; accent-color: var(--violet); }
   const ch2 = $('chart2'), c2 = ch2.getContext('2d');
 
   function drawCharts() {
-    if (!history.length) { c1.clearRect(0, 0, ch1.width, ch1.height); c2.clearRect(0, 0, ch2.width, ch2.height); return; }
+    if (!history.length) { c1.clearRect(0, 0, ch1.width, ch1.height); c2.clearRect(0, 0, ch2.width, ch2.height); updatePKBadge(); return; }
     const tEnd = Math.max(24, st.t);
     drawChart1(tEnd);
     drawChart2(tEnd);
+    updatePKBadge();
   }
 
   function drawChart1(tEnd) {
@@ -1122,6 +1471,34 @@ input[type=range] { width: 100%; accent-color: var(--violet); }
   window.addEventListener('pointermove', function (ev) { if (dragging) applyTool(ev); });
   window.addEventListener('pointerup', function () { dragging = false; });
 
+  // ---------- probe-тултип: что под курсором ----------
+  const probe = $('probe');
+  dish.addEventListener('pointermove', function (ev) {
+    if (!st || !probe) return;
+    const rect = dish.getBoundingClientRect();
+    const p = canvasPos(ev);
+    const cxi = Math.round(p.x), cyi = Math.round(p.y);
+    if (dragging || !E.inside(st, cxi, cyi)) { probe.style.display = 'none'; return; }
+    const i = cyi * W + cxi;
+    const mic = st.species[0].MIC;
+    let rows = '<b>A</b> ' + (st.A[i] >= 10 ? st.A[i].toFixed(0) : st.A[i].toFixed(1)) + ' мг/л (' +
+      (st.A[i] / mic).toFixed(1) + '×MIC) · <b>S</b> ' + (st.S[i] / st.env.S0 * 100).toFixed(0) + '%';
+    for (let s = 0; s < 4; s++) {
+      if (!st.enabled[s] || st.N[s][i] < 1) continue;
+      rows += '<br><span class="sw" style="background:' + st.species[s].css + '"></span> ' + st.species[s].name + ': ' + fmtExp(st.N[s][i]);
+    }
+    if (st.abZones) {
+      const f = (p.x - (st.cx - st.R)) / (2 * st.R);
+      const zi = f < 0.25 ? 0 : f < 0.5 ? 1 : f < 0.75 ? 2 : 3;
+      rows += '<br>полоса: <b>' + ['0 (чисто)', '1×MIC', '10×MIC', '100×MIC'][zi] + '</b>';
+    }
+    probe.innerHTML = rows;
+    probe.style.display = 'block';
+    probe.style.left = Math.max(4, Math.min(rect.width - 175, ev.clientX - rect.left + 14)) + 'px';
+    probe.style.top = Math.max(4, Math.min(rect.height - 70, ev.clientY - rect.top + 14)) + 'px';
+  });
+  dish.addEventListener('pointerleave', function () { if (probe) probe.style.display = 'none'; });
+
   function setTool(kind) {
     tool.kind = kind;
     $('toolSeed').classList.toggle('active', kind === 'seed');
@@ -1150,6 +1527,70 @@ input[type=range] { width: 100%; accent-color: var(--violet); }
     }, 60);
   }
 
+  // ---------- экспорт / шаринг / проектор ----------
+  function download(href, name) {
+    const a = document.createElement('a');
+    a.href = href; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(href); }, 3000);
+  }
+  $('btnCSV').addEventListener('click', function () {
+    download(URL.createObjectURL(new Blob([E.buildCSV(history)], { type: 'text/csv;charset=utf-8' })),
+      'vetpetri_t' + st.t.toFixed(1) + 'h.csv');
+  });
+  $('btnPNG').addEventListener('click', function () {
+    const a = document.createElement('a');
+    a.href = dish.toDataURL('image/png'); a.download = 'vetpetri_dish_t' + st.t.toFixed(1) + 'h.png';
+    document.body.appendChild(a); a.click(); a.remove();
+  });
+
+  function collectParams() {
+    const en = [0, 1, 2, 3].map(function (i) { return $('sp-en-' + i).checked ? 1 : 0; }).join('');
+    const mu = [0, 1, 2, 3].map(function (i) { return $('sp-mu-' + i).value; }).join(',');
+    const mic = [0, 1, 2, 3].map(function (i) { return $('sp-mic-' + i).value; }).join(',');
+    return { p: String(curPreset), seed: $('seed').value, dose: $('dose').value,
+      kel: $('kel').value, pMut: $('pMut').value, S0: $('S0').value,
+      en: en, mu: mu, mic: mic, mode: $('doseMode').value };
+  }
+  let lastHashWritten = null;
+  $('btnShare').addEventListener('click', function () {
+    lastHashWritten = '#' + E.serializeParams(collectParams());
+    location.hash = lastHashWritten.slice(1);
+    const url = location.href;
+    const done = function () {
+      $('hint').textContent = 'Ссылка со сценарием — в адресной строке; скопируй и передай студентам';
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, done);
+    else done();
+  });
+
+  function applyFromHash() {
+    const hp = E.parseParams(location.hash || '');
+    if (!hp || hp.p === undefined) return false;
+    if (lastHashWritten !== null && location.hash === lastHashWritten) return false; // сами записали — не переприменять
+    const idx = Math.max(0, Math.min(PRESETS.length - 1, parseInt(hp.p, 10) || 0));
+    applyPreset(idx);
+    try {
+      if (hp.seed !== undefined) $('seed').value = parseInt(hp.seed, 10) || 42;
+      if (hp.dose !== undefined) $('dose').value = hp.dose;
+      if (hp.kel !== undefined) $('kel').value = hp.kel;
+      if (hp.pMut !== undefined) $('pMut').value = hp.pMut;
+      if (hp.S0 !== undefined) $('S0').value = hp.S0;
+      if (hp.mode !== undefined) $('doseMode').value = hp.mode;
+      if (hp.en) for (let i = 0; i < 4; i++) $('sp-en-' + i).checked = hp.en[i] === '1';
+      if (hp.mu) hp.mu.split(',').forEach(function (v, i) { if ($('sp-mu-' + i)) $('sp-mu-' + i).value = v; });
+      if (hp.mic) hp.mic.split(',').forEach(function (v, i) { if ($('sp-mic-' + i)) $('sp-mic-' + i).value = v; });
+      updateDoseUI();
+    } catch (e) { /* битый hash — играем по пресету */ }
+    resetSim();
+    return true;
+  }
+  window.addEventListener('hashchange', applyFromHash); // вставили ссылку-сценарий в открытый таб — применилось
+
+  $('btnProj').addEventListener('click', function () {
+    const on = document.body.classList.toggle('projector');
+    this.classList.toggle('active', on);
+  });
   // ---------- инициализация ----------
   function init() {
     buildSpeciesPanel();
@@ -1170,6 +1611,7 @@ input[type=range] { width: 100%; accent-color: var(--violet); }
     $('btnReset').addEventListener('click', resetSim);
     $('selSpeed').addEventListener('change', function () { speed = parseFloat(this.value); });
     $('dose').addEventListener('input', updateDoseUI);
+    $('doseMode').addEventListener('change', resetSim);
     $('kel').addEventListener('change', resetSim);
     $('S0').addEventListener('change', resetSim);
     $('pMut').addEventListener('change', resetSim);
@@ -1195,6 +1637,7 @@ input[type=range] { width: 100%; accent-color: var(--violet); }
     $('mpcTick').textContent = 'MPC ' + E.SPECIES[0].MIC * E.MPC_FACTOR;
 
     applyPreset(0);
+    if (location.hash && location.hash.length > 1) applyFromHash(); // ссылка-сценарий из методички
     requestAnimationFrame(loop);
     setTimeout(function () { runTests(); }, 400);
     setInterval(function () { if (st) { updateSpeciesCounts(); } }, 700);
