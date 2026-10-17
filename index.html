@@ -141,6 +141,18 @@ details.lecture li { margin-bottom: 3px; }
 details.lecture .lq, details.lecture .la { font-size: 12.5px; margin-top: 4px; }
 details.lecture .la { color: var(--ok); }
 
+/* v1.2: хроника событий + живой тоггл видов */
+.chron { margin-top: 10px; background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; }
+.chron-cap { font-size: 12px; color: var(--mut); margin-bottom: 4px; }
+.chron-cap b { color: var(--tx); }
+.chron-list { max-height: 150px; overflow-y: auto; font-size: 12.5px; }
+.chron-list .ev { padding: 2.5px 0; border-top: 1px dashed rgba(34,48,71,.55); }
+.chron-list .ev:first-child { border-top: none; }
+.chron-list .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+.dot.gr { background: var(--ok); } .dot.ab { background: var(--violet); }
+.dot.mut { background: var(--bad); } .dot.warn { background: var(--warn); } .dot.man { background: #6b7c94; }
+.sp-off { opacity: .45; }
+
 /* проектор: крупные шрифты + контраст (PhET-style legibility) */
 body.projector { --mut: #9db1cc; --tx: #eef5fc; }
 body.projector .hdr h1 { font-size: 27px; }
@@ -167,6 +179,8 @@ body.projector details.lecture ol,
 body.projector details.lecture .lq,
 body.projector details.lecture .la { font-size: 14.5px; }
 body.projector .pk-badge { font-size: 14px; }
+body.projector .chron-cap { font-size: 14.5px; }
+body.projector .chron-list { font-size: 14.5px; max-height: 210px; }
 
 </style>
 </head>
@@ -227,6 +241,11 @@ body.projector .pk-badge { font-size: 14px; }
       <div class="chart-cap"><b>Среда:</b> субстрат (зелёная, % от S₀) и антибиотик (фиолетовая, мг/л); пунктир — MICwt / MPC</div>
       <canvas id="chart2" width="960" height="130"></canvas>
     </div>
+
+    <div class="chron">
+      <div class="chron-cap"><b>Хроника событий</b> <span class="muted">— что случилось и когда: лаг/экспонента, субстрат, АБ vs MIC, рождение мутантов, ручные действия</span></div>
+      <div id="chronList" class="chron-list"></div>
+    </div>
   </section>
 
   <aside class="panel">
@@ -264,7 +283,7 @@ body.projector .pk-badge { font-size: 14px; }
         <option value="1e-5">10⁻⁵</option>
       </select></div>
 
-    <h2>Виды <span class="muted">(реальные параметры — см. источники)</span></h2>
+    <h2>Виды <span class="muted">(галочка — вид сразу на чаше; если его не было, сеется капля)</span></h2>
     <div id="speciesList"></div>
 
     <h2>Среда и численное</h2>
@@ -272,7 +291,7 @@ body.projector .pk-badge { font-size: 14px; }
     <div class="kv"><label>Seed (воспроизводимость)</label><span class="inline"><input id="seed" type="number" value="42" step="1"><button id="btnSeedRnd" class="btn sm">случайный</button></span></div>
 
     <details id="testsBox" class="box">
-      <summary>Тесты моделей (S-кривая · time-kill · seed · окно селекции · PK-инфузия · мега-чаша · экспорт)</summary>
+      <summary>Тесты моделей (S-кривая · time-kill · seed · окно селекции · PK-инфузия · мега-чаша · экспорт · хроника)</summary>
       <button id="btnTests" class="btn">Прогнать заново</button>
       <div id="testsOut"></div>
     </details>
@@ -743,6 +762,98 @@ body.projector .pk-badge { font-size: 14px; }
     return out;
   }
 
+  // ---------- Хроника событий (v1.2): детектор заметных событий по шагам stats ----------
+  // Чистая функция БЕЗ rng (поток ГСЧ не трогаем — воспроизводимость не меняется).
+  // UI/тесты вызывают chronicleStep() после каждого stats(); fl — накопитель на прогон.
+  // Классы событий: gr рост/субстрат, ab антибиотик, mut мутанты, warn гибель, man ручные.
+  function chronFlags() {
+    return { n0: null, r0: 0, lag: false, s5: false, s05: false, abUp: false, abDown: false,
+      mut0: false, mutHalf: false, kill1: false, kill3: false, regrow: false,
+      peak: 0, trough: Infinity, band: 0 };
+  }
+
+  // полоса мега-чаши z (1..3) колонизована R (плотно, >1e6 КОЕ на ячейку)?
+  function rBandOccupied(st, z) {
+    if (!st.abZones || !st.N[3]) return false;
+    const zn = st.abZones[z];
+    const x0 = Math.max(0, Math.ceil(st.cx - st.R + zn.f0 * 2 * st.R));
+    const x1 = Math.min(st.W - 1, Math.floor(st.cx - st.R + zn.f1 * 2 * st.R));
+    const N3 = st.N[3];
+    for (let x = x0; x <= x1; x++)
+      for (let y = 0; y < st.H; y += 2)
+        if (N3[y * st.W + x] > 1e6) return true;
+    return false;
+  }
+
+  function chronicleStep(st, s, fl) {
+    const out = [];
+    const tot = s.tot || s.totals, t = s.t; // s — запись истории (tot) или вывод stats() (totals)
+    const total = tot[0] + tot[1] + tot[2] + tot[3];
+    if (fl.n0 === null) { fl.n0 = total; fl.r0 = tot[3]; } // первый замер: посев
+    // прогон, начавшийся с пустой чаши (песочница): база перезакрепляется после первого посева
+    if (fl.n0 <= 100 && total > 1000) { fl.n0 = total; fl.r0 = Math.max(fl.r0, tot[3]); }
+    // лаг → экспонента: суммарная биомасса утроилась
+    if (!fl.lag && fl.n0 > 100 && total > fl.n0 * 2.5 && t > 0.2) {
+      fl.lag = true;
+      out.push({ t: t, txt: 'лаг-фаза позади — пошёл экспоненциальный рост', cls: 'gr' });
+    }
+    // субстрат
+    const sf = s.S / st.env.S0;
+    if (!fl.s5 && sf < 0.05) {
+      fl.s5 = true;
+      out.push({ t: t, txt: 'субстрат на исходе (<5% S\u2080) — рост замедляется', cls: 'gr' });
+    }
+    if (!fl.s05 && sf < 0.005) {
+      fl.s05 = true;
+      out.push({ t: t, txt: 'субстрат исчерпан — стационарная фаза', cls: 'gr' });
+    }
+    // пик/гибель/регроу
+    if (total > fl.peak) { fl.peak = total; fl.trough = Infinity; }
+    if (!fl.kill1 && fl.peak > 1e4 && total < fl.peak / 10 && t > 0.5) {
+      fl.kill1 = true; fl.trough = total;
+      out.push({ t: t, txt: 'массовая гибель: \u22121 log\u2081\u2080 от пика', cls: 'warn' });
+    }
+    if (!fl.kill3 && fl.kill1 && total < fl.peak / 1000) {
+      fl.kill3 = true;
+      out.push({ t: t, txt: 'массовая гибель: \u22123 log\u2081\u2080 от пика', cls: 'warn' });
+    }
+    if (fl.kill1) {
+      if (total < fl.trough) fl.trough = total;
+      if (!fl.regrow && fl.trough > 0 && total > fl.trough * 4 && s.A < st.species[0].MIC) {
+        fl.regrow = true;
+        out.push({ t: t, txt: 'регроу: выжившие отрастают (АБ упал ниже MIC)', cls: 'gr' });
+      }
+    }
+    // антибиотик (среднее по чашке; в мега-чаше вместо этого — фронты R по полосам)
+    if (!st.abZones) {
+      const mic = st.species[0].MIC;
+      if (!fl.abUp && s.A > mic) {
+        fl.abUp = true;
+        out.push({ t: t, txt: 'АБ > MICwt — началась гибель клеток', cls: 'ab' });
+      } else if (fl.abUp && !fl.abDown && s.A < mic) {
+        fl.abDown = true;
+        out.push({ t: t, txt: 'АБ < MICwt — окно для регроу открыто', cls: 'ab' });
+      }
+    } else {
+      for (let z = fl.band + 1; z < st.abZones.length; z++) {
+        if (rBandOccupied(st, z)) {
+          fl.band = z;
+          out.push({ t: t, txt: 'R-фронт вошёл в полосу ' + (z === 1 ? '1\u00d7MIC' : z === 2 ? '10\u00d7MIC' : '100\u00d7MIC'), cls: 'mut' });
+        } else break;
+      }
+    }
+    // мутанты: родились сами (r0 < 1 — R не сеяли) и вытеснили wt
+    if (!fl.mut0 && fl.r0 < 1 && tot[3] > 100) {
+      fl.mut0 = true;
+      out.push({ t: t, txt: 'родился первый мутант (β-лактамаза, MIC 64)', cls: 'mut' });
+    }
+    if (!fl.mutHalf && fl.r0 < 1 && (tot[0] + tot[3]) > 1e4 && tot[3] / (tot[0] + tot[3]) > 0.5) {
+      fl.mutHalf = true;
+      out.push({ t: t, txt: 'мутанты вытеснили wt (>50% популяции)', cls: 'mut' });
+    }
+    return out;
+  }
+
   return {
     mulberry32: mulberry32,
     SPECIES: SPECIES_DEFAULTS,
@@ -763,6 +874,8 @@ body.projector .pk-badge { font-size: 14px; }
     buildCSV: buildCSV,
     serializeParams: serializeParams,
     parseParams: parseParams,
+    chronFlags: chronFlags,
+    chronicleStep: chronicleStep,
   };
 });
 
@@ -987,8 +1100,38 @@ body.projector .pk-badge { font-size: 14px; }
     };
   }
 
+  // Т8. Хроника событий: детектор ловит начало гибели (АБ>MIC), спад АБ ниже MIC
+  //     и последующий регроу; времена событий монотонны.
+  function testChronicle() {
+    const st = mk({ seed: 7, enabled: [true, false, false, false],
+      env: { noise: 0, kel: 1.0, pMut: 0 } });
+    E.lawn(st, 0, 1e6);
+    E.bolusAB(st, 32); // старт выше MIC, далее элиминация t½ = 1 ч
+    const fl = E.chronFlags();
+    const chron = [];
+    let k = 0;
+    while (st.t < 12) {
+      E.step(st, 0.05); k++;
+      if (k % 2 === 0) E.chronicleStep(st, E.stats(st), fl)
+        .forEach(function (e) { chron.push(e); });
+    }
+    const has = function (cls) { return chron.some(function (e) { return e.cls === cls; }); };
+    let mono = true;
+    for (let i = 1; i < chron.length; i++) if (chron[i].t < chron[i - 1].t - 1e-9) mono = false;
+    const kill = chron.filter(function (e) { return e.cls === 'warn'; }).length;
+    const regrow = chron.some(function (e) { return e.txt.indexOf('регроу') === 0; });
+    const abUp = has('ab'), abDown = chron.some(function (e) { return e.txt.indexOf('АБ < MIC') === 0; });
+    return {
+      name: 'Хроника событий: гибель → АБ < MIC → регроу, времена монотонны',
+      pass: abUp && kill >= 1 && abDown && regrow && mono,
+      details: 'событий: ' + chron.length + ' [' + chron.map(function (e) {
+        return 't=' + e.t.toFixed(1) + ' ' + e.txt.slice(0, 24);
+      }).join(' | ') + ']',
+    };
+  }
+
   function runAll() {
-    const tests = [testGrowth, testTimeKill, testSeed, testSelectionWindow, testInfusion, testMegaPlate, testExportHash];
+    const tests = [testGrowth, testTimeKill, testSeed, testSelectionWindow, testInfusion, testMegaPlate, testExportHash, testChronicle];
     return tests.map(function (f) {
       try { return f(); }
       catch (e) { return { name: f.name, pass: false, details: 'ошибка: ' + e.message }; }
@@ -1027,6 +1170,7 @@ body.projector .pk-badge { font-size: 14px; }
 
   let st = null, playing = false, speed = 8, tool = { kind: 'seed', sp: 0 };
   let history = [], lastPush = -1, frameNo = 0, curPreset = 0;
+  let chron = [], chronFl = null, chronDirty = false; // хроника событий (v1.2)
 
   // ---------- параметры видов из UI ----------
   function uiSpecies() {
@@ -1229,10 +1373,13 @@ body.projector .pk-badge { font-size: 14px; }
     st = buildState();
     PRESETS[curPreset].setup(st);
     history = []; lastPush = -1;
+    chron = []; chronFl = E.chronFlags(); chronDirty = false;
     playing = false; $('btnPlay').textContent = '\u25b6 Пуск';
+    for (let i = 0; i < 4; i++) { const row = $('sprow-' + i); if (row) row.classList.toggle('sp-off', !st.enabled[i]); }
     pushHistory(true);
     render();
     drawCharts();
+    renderChron();
     updateLegend();
     updateClock();
     updatePKBadge();
@@ -1244,6 +1391,34 @@ body.projector .pk-badge { font-size: 14px; }
     const s = E.stats(st);
     history.push({ t: s.t, tot: s.totals.slice(), S: s.S, A: s.A });
     if (history.length > 2600) history = history.filter(function (_, i) { return i % 2 === 0; });
+    const evs = E.chronicleStep(st, s, chronFl || (chronFl = E.chronFlags()));
+    if (evs.length) pushChronEvents(evs);
+  }
+
+  // ---------- хроника событий (F8): автособытия + ручные действия ----------
+  function pushChronEvents(evs) {
+    for (let k = 0; k < evs.length; k++) chron.push(evs[k]);
+    if (chron.length > 120) chron.splice(0, chron.length - 120);
+    chronDirty = true;
+  }
+  function logEvent(txt, cls) { // ручные действия; анти-спам при протяжке
+    if (!st) return;
+    const last = chron[chron.length - 1];
+    if (last && last.txt === txt && st.t - last.t < 1.5) return;
+    chron.push({ t: st.t, txt: txt, cls: cls || 'man' });
+    if (chron.length > 120) chron.splice(0, chron.length - 120);
+    renderChron();
+  }
+  function renderChron() {
+    const box = $('chronList');
+    if (!box) return;
+    let html = '';
+    for (let k = chron.length - 1; k >= 0; k--) {
+      const e = chron[k];
+      html += '<div class="ev"><span class="dot ' + e.cls + '"></span>t=' + e.t.toFixed(1) + ' ч — ' + e.txt + '</div>';
+    }
+    box.innerHTML = html || '<div class="ev muted">пока тихо — события появятся по ходу прогона</div>';
+    box.scrollTop = 0;
   }
 
   // ---------- рендер чаши ----------
@@ -1302,7 +1477,7 @@ body.projector .pk-badge { font-size: 14px; }
       for (let k = 0; k < steps; k++) { E.step(st, DT); pushHistory(false); }
       render();
       updateClock();
-      if ((frameNo++ & 7) === 0) { updateLegend(); drawCharts(); }
+      if ((frameNo++ & 7) === 0) { updateLegend(); drawCharts(); if (chronDirty) { renderChron(); chronDirty = false; } }
     }
     requestAnimationFrame(loop);
   }
@@ -1354,7 +1529,7 @@ body.projector .pk-badge { font-size: 14px; }
       c1.fillText(tt + 'ч', Math.min(w - 24, xx), h - 2);
     }
     const anySpecies = [0, 1, 2, 3].filter(function (i) {
-      return history.some(function (p) { return p.tot[i] > 100; });
+      return st.enabled[i] && history.some(function (p) { return p.tot[i] > 100; });
     });
     anySpecies.forEach(function (si) {
       c1.strokeStyle = E.SPECIES[si].css; c1.lineWidth = 1.6; c1.beginPath();
@@ -1425,10 +1600,32 @@ body.projector .pk-badge { font-size: 14px; }
         if (ev.target.tagName === 'INPUT') return;
         $('sprow-' + i).classList.toggle('open');
       });
-      $('sp-en-' + i).addEventListener('change', resetSim);
+      $('sp-en-' + i).addEventListener('change', function () { toggleSpecies(i); });
       $('sp-mu-' + i).addEventListener('change', resetSim);
       $('sp-mic-' + i).addEventListener('change', resetSim);
     });
+  }
+
+  // тоггл вида БЕЗ сброса прогона: включили — вид сразу на чаше (если его не было —
+  // сеется капля в свободный слот); выключили — скрыт (клетки остаются в модели).
+  // Слоты детерминированы по индексу вида: верх/право/низ/лево от центра.
+  function toggleSpecies(i) {
+    const row = $('sprow-' + i);
+    if (!st) return;
+    if ($('sp-en-' + i).checked) {
+      st.enabled[i] = true;
+      if (row) row.classList.remove('sp-off');
+      if (E.stats(st).totals[i] < 1) {
+        const a = -Math.PI / 2 + i * Math.PI / 2;
+        E.inoculate(st, i, st.cx + Math.cos(a) * st.R * 0.55, st.cy + Math.sin(a) * st.R * 0.55, 1e6, 3);
+        logEvent('вид включён — посеян: ' + st.species[i].name, 'man');
+      }
+    } else {
+      st.enabled[i] = false; // скрыть: из рендера/статистики, но клетки в чаше живут
+      if (row) row.classList.add('sp-off');
+      logEvent('вид скрыт: ' + st.species[i].name, 'man');
+    }
+    render(); updateLegend(); drawCharts(); updateSpeciesCounts();
   }
 
   function updateSpeciesCounts() {
@@ -1454,8 +1651,16 @@ body.projector .pk-badge { font-size: 14px; }
     lastApply = now;
     const p = canvasPos(ev);
     if (!E.inside(st, Math.round(p.x), Math.round(p.y))) return;
-    if (tool.kind === 'seed') E.inoculate(st, tool.sp, p.x, p.y, 1e6, 4);
-    else if (tool.kind === 'drop') E.dropAB(st, p.x, p.y, doseVal(), 5);
+    if (tool.kind === 'seed') {
+      if (!st.enabled[tool.sp]) { // сеем выключенный вид — включаем, иначе клик «в никуда»
+        $('sp-en-' + tool.sp).checked = true;
+        toggleSpecies(tool.sp);
+      } else {
+        E.inoculate(st, tool.sp, p.x, p.y, 1e6, 4);
+        logEvent('посев: ' + st.species[tool.sp].name, 'man');
+      }
+    }
+    else if (tool.kind === 'drop') { E.dropAB(st, p.x, p.y, doseVal(), 5); logEvent('капля АБ ' + (doseVal() >= 10 ? doseVal().toFixed(0) : doseVal().toFixed(1)) + ' мг/л', 'man'); }
     else if (tool.kind === 'wipe') {
       const R = 5;
       for (let yy = Math.floor(p.y - R); yy <= p.y + R; yy++)
@@ -1464,6 +1669,7 @@ body.projector .pk-badge { font-size: 14px; }
           if ((xx - p.x) * (xx - p.x) + (yy - p.y) * (yy - p.y) > R * R) continue;
           for (let s = 0; s < 4; s++) st.N[s][yy * W + xx] = 0;
         }
+      logEvent('стерты колонии', 'man');
     }
     render(); updateLegend();
   }
@@ -1630,8 +1836,8 @@ body.projector .pk-badge { font-size: 14px; }
     });
     $('toolDrop').addEventListener('click', function () { setTool('drop'); });
     $('toolWipe').addEventListener('click', function () { setTool('wipe'); });
-    $('btnLawn').addEventListener('click', function () { E.lawn(st, 0, 1e7); render(); updateLegend(); });
-    $('btnBolus').addEventListener('click', function () { E.bolusAB(st, doseVal()); render(); });
+    $('btnLawn').addEventListener('click', function () { E.lawn(st, 0, 1e7); render(); updateLegend(); logEvent('газон E. coli по всей чаше', 'man'); });
+    $('btnBolus').addEventListener('click', function () { E.bolusAB(st, doseVal()); render(); logEvent('болюс АБ ' + (doseVal() >= 10 ? doseVal().toFixed(0) : doseVal().toFixed(1)) + ' мг/л всю чашу', 'man'); });
     $('btnTests').addEventListener('click', function () { runTests(); });
     $('micTick').textContent = 'MIC ' + E.SPECIES[0].MIC;
     $('mpcTick').textContent = 'MPC ' + E.SPECIES[0].MIC * E.MPC_FACTOR;

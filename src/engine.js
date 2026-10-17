@@ -434,6 +434,98 @@
     return out;
   }
 
+  // ---------- Хроника событий (v1.2): детектор заметных событий по шагам stats ----------
+  // Чистая функция БЕЗ rng (поток ГСЧ не трогаем — воспроизводимость не меняется).
+  // UI/тесты вызывают chronicleStep() после каждого stats(); fl — накопитель на прогон.
+  // Классы событий: gr рост/субстрат, ab антибиотик, mut мутанты, warn гибель, man ручные.
+  function chronFlags() {
+    return { n0: null, r0: 0, lag: false, s5: false, s05: false, abUp: false, abDown: false,
+      mut0: false, mutHalf: false, kill1: false, kill3: false, regrow: false,
+      peak: 0, trough: Infinity, band: 0 };
+  }
+
+  // полоса мега-чаши z (1..3) колонизована R (плотно, >1e6 КОЕ на ячейку)?
+  function rBandOccupied(st, z) {
+    if (!st.abZones || !st.N[3]) return false;
+    const zn = st.abZones[z];
+    const x0 = Math.max(0, Math.ceil(st.cx - st.R + zn.f0 * 2 * st.R));
+    const x1 = Math.min(st.W - 1, Math.floor(st.cx - st.R + zn.f1 * 2 * st.R));
+    const N3 = st.N[3];
+    for (let x = x0; x <= x1; x++)
+      for (let y = 0; y < st.H; y += 2)
+        if (N3[y * st.W + x] > 1e6) return true;
+    return false;
+  }
+
+  function chronicleStep(st, s, fl) {
+    const out = [];
+    const tot = s.tot || s.totals, t = s.t; // s — запись истории (tot) или вывод stats() (totals)
+    const total = tot[0] + tot[1] + tot[2] + tot[3];
+    if (fl.n0 === null) { fl.n0 = total; fl.r0 = tot[3]; } // первый замер: посев
+    // прогон, начавшийся с пустой чаши (песочница): база перезакрепляется после первого посева
+    if (fl.n0 <= 100 && total > 1000) { fl.n0 = total; fl.r0 = Math.max(fl.r0, tot[3]); }
+    // лаг → экспонента: суммарная биомасса утроилась
+    if (!fl.lag && fl.n0 > 100 && total > fl.n0 * 2.5 && t > 0.2) {
+      fl.lag = true;
+      out.push({ t: t, txt: 'лаг-фаза позади — пошёл экспоненциальный рост', cls: 'gr' });
+    }
+    // субстрат
+    const sf = s.S / st.env.S0;
+    if (!fl.s5 && sf < 0.05) {
+      fl.s5 = true;
+      out.push({ t: t, txt: 'субстрат на исходе (<5% S\u2080) — рост замедляется', cls: 'gr' });
+    }
+    if (!fl.s05 && sf < 0.005) {
+      fl.s05 = true;
+      out.push({ t: t, txt: 'субстрат исчерпан — стационарная фаза', cls: 'gr' });
+    }
+    // пик/гибель/регроу
+    if (total > fl.peak) { fl.peak = total; fl.trough = Infinity; }
+    if (!fl.kill1 && fl.peak > 1e4 && total < fl.peak / 10 && t > 0.5) {
+      fl.kill1 = true; fl.trough = total;
+      out.push({ t: t, txt: 'массовая гибель: \u22121 log\u2081\u2080 от пика', cls: 'warn' });
+    }
+    if (!fl.kill3 && fl.kill1 && total < fl.peak / 1000) {
+      fl.kill3 = true;
+      out.push({ t: t, txt: 'массовая гибель: \u22123 log\u2081\u2080 от пика', cls: 'warn' });
+    }
+    if (fl.kill1) {
+      if (total < fl.trough) fl.trough = total;
+      if (!fl.regrow && fl.trough > 0 && total > fl.trough * 4 && s.A < st.species[0].MIC) {
+        fl.regrow = true;
+        out.push({ t: t, txt: 'регроу: выжившие отрастают (АБ упал ниже MIC)', cls: 'gr' });
+      }
+    }
+    // антибиотик (среднее по чашке; в мега-чаше вместо этого — фронты R по полосам)
+    if (!st.abZones) {
+      const mic = st.species[0].MIC;
+      if (!fl.abUp && s.A > mic) {
+        fl.abUp = true;
+        out.push({ t: t, txt: 'АБ > MICwt — началась гибель клеток', cls: 'ab' });
+      } else if (fl.abUp && !fl.abDown && s.A < mic) {
+        fl.abDown = true;
+        out.push({ t: t, txt: 'АБ < MICwt — окно для регроу открыто', cls: 'ab' });
+      }
+    } else {
+      for (let z = fl.band + 1; z < st.abZones.length; z++) {
+        if (rBandOccupied(st, z)) {
+          fl.band = z;
+          out.push({ t: t, txt: 'R-фронт вошёл в полосу ' + (z === 1 ? '1\u00d7MIC' : z === 2 ? '10\u00d7MIC' : '100\u00d7MIC'), cls: 'mut' });
+        } else break;
+      }
+    }
+    // мутанты: родились сами (r0 < 1 — R не сеяли) и вытеснили wt
+    if (!fl.mut0 && fl.r0 < 1 && tot[3] > 100) {
+      fl.mut0 = true;
+      out.push({ t: t, txt: 'родился первый мутант (β-лактамаза, MIC 64)', cls: 'mut' });
+    }
+    if (!fl.mutHalf && fl.r0 < 1 && (tot[0] + tot[3]) > 1e4 && tot[3] / (tot[0] + tot[3]) > 0.5) {
+      fl.mutHalf = true;
+      out.push({ t: t, txt: 'мутанты вытеснили wt (>50% популяции)', cls: 'mut' });
+    }
+    return out;
+  }
+
   return {
     mulberry32: mulberry32,
     SPECIES: SPECIES_DEFAULTS,
@@ -454,5 +546,7 @@
     buildCSV: buildCSV,
     serializeParams: serializeParams,
     parseParams: parseParams,
+    chronFlags: chronFlags,
+    chronicleStep: chronicleStep,
   };
 });

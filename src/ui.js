@@ -24,6 +24,7 @@
 
   let st = null, playing = false, speed = 8, tool = { kind: 'seed', sp: 0 };
   let history = [], lastPush = -1, frameNo = 0, curPreset = 0;
+  let chron = [], chronFl = null, chronDirty = false; // хроника событий (v1.2)
 
   // ---------- параметры видов из UI ----------
   function uiSpecies() {
@@ -226,10 +227,13 @@
     st = buildState();
     PRESETS[curPreset].setup(st);
     history = []; lastPush = -1;
+    chron = []; chronFl = E.chronFlags(); chronDirty = false;
     playing = false; $('btnPlay').textContent = '\u25b6 Пуск';
+    for (let i = 0; i < 4; i++) { const row = $('sprow-' + i); if (row) row.classList.toggle('sp-off', !st.enabled[i]); }
     pushHistory(true);
     render();
     drawCharts();
+    renderChron();
     updateLegend();
     updateClock();
     updatePKBadge();
@@ -241,6 +245,34 @@
     const s = E.stats(st);
     history.push({ t: s.t, tot: s.totals.slice(), S: s.S, A: s.A });
     if (history.length > 2600) history = history.filter(function (_, i) { return i % 2 === 0; });
+    const evs = E.chronicleStep(st, s, chronFl || (chronFl = E.chronFlags()));
+    if (evs.length) pushChronEvents(evs);
+  }
+
+  // ---------- хроника событий (F8): автособытия + ручные действия ----------
+  function pushChronEvents(evs) {
+    for (let k = 0; k < evs.length; k++) chron.push(evs[k]);
+    if (chron.length > 120) chron.splice(0, chron.length - 120);
+    chronDirty = true;
+  }
+  function logEvent(txt, cls) { // ручные действия; анти-спам при протяжке
+    if (!st) return;
+    const last = chron[chron.length - 1];
+    if (last && last.txt === txt && st.t - last.t < 1.5) return;
+    chron.push({ t: st.t, txt: txt, cls: cls || 'man' });
+    if (chron.length > 120) chron.splice(0, chron.length - 120);
+    renderChron();
+  }
+  function renderChron() {
+    const box = $('chronList');
+    if (!box) return;
+    let html = '';
+    for (let k = chron.length - 1; k >= 0; k--) {
+      const e = chron[k];
+      html += '<div class="ev"><span class="dot ' + e.cls + '"></span>t=' + e.t.toFixed(1) + ' ч — ' + e.txt + '</div>';
+    }
+    box.innerHTML = html || '<div class="ev muted">пока тихо — события появятся по ходу прогона</div>';
+    box.scrollTop = 0;
   }
 
   // ---------- рендер чаши ----------
@@ -299,7 +331,7 @@
       for (let k = 0; k < steps; k++) { E.step(st, DT); pushHistory(false); }
       render();
       updateClock();
-      if ((frameNo++ & 7) === 0) { updateLegend(); drawCharts(); }
+      if ((frameNo++ & 7) === 0) { updateLegend(); drawCharts(); if (chronDirty) { renderChron(); chronDirty = false; } }
     }
     requestAnimationFrame(loop);
   }
@@ -351,7 +383,7 @@
       c1.fillText(tt + 'ч', Math.min(w - 24, xx), h - 2);
     }
     const anySpecies = [0, 1, 2, 3].filter(function (i) {
-      return history.some(function (p) { return p.tot[i] > 100; });
+      return st.enabled[i] && history.some(function (p) { return p.tot[i] > 100; });
     });
     anySpecies.forEach(function (si) {
       c1.strokeStyle = E.SPECIES[si].css; c1.lineWidth = 1.6; c1.beginPath();
@@ -422,10 +454,32 @@
         if (ev.target.tagName === 'INPUT') return;
         $('sprow-' + i).classList.toggle('open');
       });
-      $('sp-en-' + i).addEventListener('change', resetSim);
+      $('sp-en-' + i).addEventListener('change', function () { toggleSpecies(i); });
       $('sp-mu-' + i).addEventListener('change', resetSim);
       $('sp-mic-' + i).addEventListener('change', resetSim);
     });
+  }
+
+  // тоггл вида БЕЗ сброса прогона: включили — вид сразу на чаше (если его не было —
+  // сеется капля в свободный слот); выключили — скрыт (клетки остаются в модели).
+  // Слоты детерминированы по индексу вида: верх/право/низ/лево от центра.
+  function toggleSpecies(i) {
+    const row = $('sprow-' + i);
+    if (!st) return;
+    if ($('sp-en-' + i).checked) {
+      st.enabled[i] = true;
+      if (row) row.classList.remove('sp-off');
+      if (E.stats(st).totals[i] < 1) {
+        const a = -Math.PI / 2 + i * Math.PI / 2;
+        E.inoculate(st, i, st.cx + Math.cos(a) * st.R * 0.55, st.cy + Math.sin(a) * st.R * 0.55, 1e6, 3);
+        logEvent('вид включён — посеян: ' + st.species[i].name, 'man');
+      }
+    } else {
+      st.enabled[i] = false; // скрыть: из рендера/статистики, но клетки в чаше живут
+      if (row) row.classList.add('sp-off');
+      logEvent('вид скрыт: ' + st.species[i].name, 'man');
+    }
+    render(); updateLegend(); drawCharts(); updateSpeciesCounts();
   }
 
   function updateSpeciesCounts() {
@@ -451,8 +505,16 @@
     lastApply = now;
     const p = canvasPos(ev);
     if (!E.inside(st, Math.round(p.x), Math.round(p.y))) return;
-    if (tool.kind === 'seed') E.inoculate(st, tool.sp, p.x, p.y, 1e6, 4);
-    else if (tool.kind === 'drop') E.dropAB(st, p.x, p.y, doseVal(), 5);
+    if (tool.kind === 'seed') {
+      if (!st.enabled[tool.sp]) { // сеем выключенный вид — включаем, иначе клик «в никуда»
+        $('sp-en-' + tool.sp).checked = true;
+        toggleSpecies(tool.sp);
+      } else {
+        E.inoculate(st, tool.sp, p.x, p.y, 1e6, 4);
+        logEvent('посев: ' + st.species[tool.sp].name, 'man');
+      }
+    }
+    else if (tool.kind === 'drop') { E.dropAB(st, p.x, p.y, doseVal(), 5); logEvent('капля АБ ' + (doseVal() >= 10 ? doseVal().toFixed(0) : doseVal().toFixed(1)) + ' мг/л', 'man'); }
     else if (tool.kind === 'wipe') {
       const R = 5;
       for (let yy = Math.floor(p.y - R); yy <= p.y + R; yy++)
@@ -461,6 +523,7 @@
           if ((xx - p.x) * (xx - p.x) + (yy - p.y) * (yy - p.y) > R * R) continue;
           for (let s = 0; s < 4; s++) st.N[s][yy * W + xx] = 0;
         }
+      logEvent('стерты колонии', 'man');
     }
     render(); updateLegend();
   }
@@ -627,8 +690,8 @@
     });
     $('toolDrop').addEventListener('click', function () { setTool('drop'); });
     $('toolWipe').addEventListener('click', function () { setTool('wipe'); });
-    $('btnLawn').addEventListener('click', function () { E.lawn(st, 0, 1e7); render(); updateLegend(); });
-    $('btnBolus').addEventListener('click', function () { E.bolusAB(st, doseVal()); render(); });
+    $('btnLawn').addEventListener('click', function () { E.lawn(st, 0, 1e7); render(); updateLegend(); logEvent('газон E. coli по всей чаше', 'man'); });
+    $('btnBolus').addEventListener('click', function () { E.bolusAB(st, doseVal()); render(); logEvent('болюс АБ ' + (doseVal() >= 10 ? doseVal().toFixed(0) : doseVal().toFixed(1)) + ' мг/л всю чашу', 'man'); });
     $('btnTests').addEventListener('click', function () { runTests(); });
     $('micTick').textContent = 'MIC ' + E.SPECIES[0].MIC;
     $('mpcTick').textContent = 'MPC ' + E.SPECIES[0].MIC * E.MPC_FACTOR;

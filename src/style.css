@@ -131,6 +131,18 @@ details.lecture li { margin-bottom: 3px; }
 details.lecture .lq, details.lecture .la { font-size: 12.5px; margin-top: 4px; }
 details.lecture .la { color: var(--ok); }
 
+/* v1.2: хроника событий + живой тоггл видов */
+.chron { margin-top: 10px; background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; }
+.chron-cap { font-size: 12px; color: var(--mut); margin-bottom: 4px; }
+.chron-cap b { color: var(--tx); }
+.chron-list { max-height: 150px; overflow-y: auto; font-size: 12.5px; }
+.chron-list .ev { padding: 2.5px 0; border-top: 1px dashed rgba(34,48,71,.55); }
+.chron-list .ev:first-child { border-top: none; }
+.chron-list .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+.dot.gr { background: var(--ok); } .dot.ab { background: var(--violet); }
+.dot.mut { background: var(--bad); } .dot.warn { background: var(--warn); } .dot.man { background: #6b7c94; }
+.sp-off { opacity: .45; }
+
 /* проектор: крупные шрифты + контраст (PhET-style legibility) */
 body.projector { --mut: #9db1cc; --tx: #eef5fc; }
 body.projector .hdr h1 { font-size: 27px; }
@@ -157,3 +169,5 @@ body.projector details.lecture ol,
 body.projector details.lecture .lq,
 body.projector details.lecture .la { font-size: 14.5px; }
 body.projector .pk-badge { font-size: 14px; }
+body.projector .chron-cap { font-size: 14.5px; }
+body.projector .chron-list { font-size: 14.5px; max-height: 210px; }

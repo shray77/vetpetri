@@ -68,6 +68,11 @@
       <div class="chart-cap"><b>Среда:</b> субстрат (зелёная, % от S₀) и антибиотик (фиолетовая, мг/л); пунктир — MICwt / MPC</div>
       <canvas id="chart2" width="960" height="130"></canvas>
     </div>
+
+    <div class="chron">
+      <div class="chron-cap"><b>Хроника событий</b> <span class="muted">— что случилось и когда: лаг/экспонента, субстрат, АБ vs MIC, рождение мутантов, ручные действия</span></div>
+      <div id="chronList" class="chron-list"></div>
+    </div>
   </section>
 
   <aside class="panel">
@@ -105,7 +110,7 @@
         <option value="1e-5">10⁻⁵</option>
       </select></div>
 
-    <h2>Виды <span class="muted">(реальные параметры — см. источники)</span></h2>
+    <h2>Виды <span class="muted">(галочка — вид сразу на чаше; если его не было, сеется капля)</span></h2>
     <div id="speciesList"></div>
 
     <h2>Среда и численное</h2>
@@ -113,7 +118,7 @@
     <div class="kv"><label>Seed (воспроизводимость)</label><span class="inline"><input id="seed" type="number" value="42" step="1"><button id="btnSeedRnd" class="btn sm">случайный</button></span></div>
 
     <details id="testsBox" class="box">
-      <summary>Тесты моделей (S-кривая · time-kill · seed · окно селекции · PK-инфузия · мега-чаша · экспорт)</summary>
+      <summary>Тесты моделей (S-кривая · time-kill · seed · окно селекции · PK-инфузия · мега-чаша · экспорт · хроника)</summary>
       <button id="btnTests" class="btn">Прогнать заново</button>
       <div id="testsOut"></div>
     </details>

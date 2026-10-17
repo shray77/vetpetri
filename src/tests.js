@@ -217,8 +217,38 @@
     };
   }
 
+  // Т8. Хроника событий: детектор ловит начало гибели (АБ>MIC), спад АБ ниже MIC
+  //     и последующий регроу; времена событий монотонны.
+  function testChronicle() {
+    const st = mk({ seed: 7, enabled: [true, false, false, false],
+      env: { noise: 0, kel: 1.0, pMut: 0 } });
+    E.lawn(st, 0, 1e6);
+    E.bolusAB(st, 32); // старт выше MIC, далее элиминация t½ = 1 ч
+    const fl = E.chronFlags();
+    const chron = [];
+    let k = 0;
+    while (st.t < 12) {
+      E.step(st, 0.05); k++;
+      if (k % 2 === 0) E.chronicleStep(st, E.stats(st), fl)
+        .forEach(function (e) { chron.push(e); });
+    }
+    const has = function (cls) { return chron.some(function (e) { return e.cls === cls; }); };
+    let mono = true;
+    for (let i = 1; i < chron.length; i++) if (chron[i].t < chron[i - 1].t - 1e-9) mono = false;
+    const kill = chron.filter(function (e) { return e.cls === 'warn'; }).length;
+    const regrow = chron.some(function (e) { return e.txt.indexOf('регроу') === 0; });
+    const abUp = has('ab'), abDown = chron.some(function (e) { return e.txt.indexOf('АБ < MIC') === 0; });
+    return {
+      name: 'Хроника событий: гибель → АБ < MIC → регроу, времена монотонны',
+      pass: abUp && kill >= 1 && abDown && regrow && mono,
+      details: 'событий: ' + chron.length + ' [' + chron.map(function (e) {
+        return 't=' + e.t.toFixed(1) + ' ' + e.txt.slice(0, 24);
+      }).join(' | ') + ']',
+    };
+  }
+
   function runAll() {
-    const tests = [testGrowth, testTimeKill, testSeed, testSelectionWindow, testInfusion, testMegaPlate, testExportHash];
+    const tests = [testGrowth, testTimeKill, testSeed, testSelectionWindow, testInfusion, testMegaPlate, testExportHash, testChronicle];
     return tests.map(function (f) {
       try { return f(); }
       catch (e) { return { name: f.name, pass: false, details: 'ошибка: ' + e.message }; }
