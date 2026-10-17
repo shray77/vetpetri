@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ВетПетри — научная песочница чашки Петри (вет. микробиология)</title>
+<meta name="description" content="Учебный симулятор чашки Петри с реальными ветеринарными патогенами: кинетика Моно, лаг-фаза по Бараньи, конкуренция видов, time-kill по Хиллу/Emax, окно селекции мутантов. Один HTML, без бэкенда.">
+<meta property="og:title" content="ВетПетри — симулятор чашки Петри">
+<meta property="og:description" content="Моно, Бараньи, Хилл/Emax, окно селекции мутантов — на реальных вет. патогенах. Для пары по микробиологии.">
+<style>
+/*__CSS__*/
+</style>
+</head>
+<body>
+<header class="hdr">
+  <div class="hdr-title">
+    <span class="logo">🧫</span>
+    <div>
+      <h1>ВетПетри <span class="sub">— научная песочница чашки Петри</span></h1>
+      <div class="tagline">Моно · Бараньи (лаг-фаза) · конкуренция · Хилл/Emax (time-kill) · окно селекции мутантов — реальные вет. патогены</div>
+    </div>
+  </div>
+  <div id="modelBadge" class="badge" title="Тесты моделей на известных кривых">модели: проверка…</div>
+</header>
+
+<main class="wrap">
+  <section class="stage">
+    <div class="dish-wrap">
+      <canvas id="dish" width="960" height="600"></canvas>
+      <div id="hint" class="hint">Пресет «Кривая роста» — жми «пуск». Инструменты: посев / капля АБ / стереть.</div>
+    </div>
+
+    <div class="toolbar">
+      <button id="btnPlay" class="btn primary">▶ Пуск</button>
+      <button id="btnStep" class="btn">Шаг +1 ч</button>
+      <button id="btnReset" class="btn">Сброс</button>
+      <span class="tb-sep"></span>
+      <span class="tb-label">Скорость:</span>
+      <select id="selSpeed" class="sel">
+        <option value="0.5">0.5 ч/с — вдумчиво</option>
+        <option value="2">2 ч/с</option>
+        <option value="8" selected>8 ч/с</option>
+        <option value="20">20 ч/с</option>
+        <option value="40">40 ч/с — турбо</option>
+      </select>
+      <span class="tb-sep"></span>
+      <span id="clock" class="clock">t = 0 ч</span>
+    </div>
+
+    <div class="tools">
+      <span class="tb-label">Инструмент:</span>
+      <div id="toolSeed" class="tool active">Посев: <b id="toolSeedName">E. coli</b></div>
+      <div id="toolDrop" class="tool">Капля антибиотика</div>
+      <div id="toolWipe" class="tool">Стереть</div>
+      <span class="tb-sep"></span>
+      <button id="btnLawn" class="btn sm">Газон E. coli</button>
+      <button id="btnBolus" class="btn sm">Болюс АБ всю чашу</button>
+    </div>
+
+    <div class="charts">
+      <div class="chart-cap"><b>КОЕ, log₁₀</b> <span id="legend"></span></div>
+      <canvas id="chart1" width="960" height="170"></canvas>
+      <div class="chart-cap"><b>Среда:</b> субстрат (зелёная, % от S₀) и антибиотик (фиолетовая, мг/л); пунктир — MICwt / MPC</div>
+      <canvas id="chart2" width="960" height="130"></canvas>
+    </div>
+  </section>
+
+  <aside class="panel">
+    <h2>Эксперименты</h2>
+    <div class="presets">
+      <button class="pbtn active" data-p="0">1 · Кривая роста</button>
+      <button class="pbtn" data-p="1">2 · Конкуренция видов</button>
+      <button class="pbtn" data-p="2">3 · Time-kill: одна доза</button>
+      <button class="pbtn" data-p="3">4 · Окно селекции мутантов</button>
+      <button class="pbtn" data-p="4">5 · Песочница</button>
+    </div>
+    <div id="presetNote" class="preset-note"></div>
+
+    <h2>Антибиотик — амоксициллин</h2>
+    <div class="dose-row">
+      <input id="dose" type="range" min="-10" max="241" value="18" step="1">
+      <div class="dose-read"><b id="doseVal">4.0 мг/л</b> <span id="doseX">= 1.0×MICwt</span></div>
+    </div>
+    <div class="dose-zones"><span class="z z1">рост</span><span class="z z2">окно селекции</span><span class="z z3">подавление</span></div>
+    <div class="dose-scale"><span>0.1</span><span id="micTick">MIC 4</span><span id="mpcTick">MPC 32</span><span>256</span></div>
+    <div class="kv"><label>t½ в хозяине, ч</label><input id="kel" type="number" value="1.0" min="0" step="0.1"></div>
+    <div class="kv"><label>Мутации p на деление</label>
+      <select id="pMut" class="sel">
+        <option value="0">выкл</option>
+        <option value="1e-7">10⁻⁷</option>
+        <option value="1e-6" selected>10⁻⁶ (демо)</option>
+        <option value="1e-5">10⁻⁵</option>
+      </select></div>
+
+    <h2>Виды <span class="muted">(реальные параметры — см. источники)</span></h2>
+    <div id="speciesList"></div>
+
+    <h2>Среда и численное</h2>
+    <div class="kv"><label>Глюкоза S₀, мг/л</label><input id="S0" type="number" value="1000" min="50" step="50"></div>
+    <div class="kv"><label>Seed (воспроизводимость)</label><span class="inline"><input id="seed" type="number" value="42" step="1"><button id="btnSeedRnd" class="btn sm">случайный</button></span></div>
+
+    <details id="testsBox" class="box">
+      <summary>Тесты моделей (S-кривая · time-kill · seed · окно селекции)</summary>
+      <button id="btnTests" class="btn">Прогнать заново</button>
+      <div id="testsOut"></div>
+    </details>
+
+    <details class="box">
+      <summary>Источники параметров</summary>
+      <ol class="src">
+        <li><b>Моно</b>: Monod J. (1949) The growth of bacterial cultures. <i>Annu Rev Microbiol</i> 3:371 — μmax, Ks (глюкоза, E. coli: 2–6 мг/л); Ks/ml30 = 53.4 мкг/л (BioNumbers 111051); обзор значений: Kovárová-Kovar &amp; Egli (1998) <i>Microbiol Mol Biol Rev</i>.</li>
+        <li><b>Лаг-фаза</b>: Baranyi J., Roberts T.A. (1994) <i>Int J Food Microbiol</i> 23:277 — q-функция q/(1+q).</li>
+        <li><b>Time-kill, Хилл/Emax</b>: Regoes R.R. et al. (2004) <i>PLoS Biol</i> 2:e230; Nielsen E.I., Friberg L.E. (2006) <i>Antimicrob Agents Chemother</i> (semimechanistic PK/PD); Foerster S. et al. (2016) <i>BMC Microbiol</i> 16:167. β-лактамы: kmax ≈ 2–4 ч⁻¹, H ≈ 1–1.5 (порядок величины).</li>
+        <li><b>MIC</b>: CLSI M100/VET01S, EUCAST — амоксициллин против E. coli WT: ECOFF ≤ 8 мг/л (здесь 4 — типичный WT); Pasteurella: S ≤ 0.5 (ампициллин, CLSI vet); Salmonella: прокси по ампициллину (S ≤ 8).</li>
+        <li><b>Окно селекции/MPC</b>: Drlica K., Zhao X. (2003) <i>J Antimicrob Chemother</i> 52:11; Drlica K. (2007) <i>Clin Infect Dis</i> 45:S129. MPC ≈ 4–8×MIC (для β-лактамов — оценка, взято 8×).</li>
+        <li><b>PK амоксициллина у КРС</b>: Kreil V.E. et al. (2012) <i>Comp Immunol Microbiol Infect Dis</i> — t½ ≈ 0.86 ± 0.3 ч (натриевая соль, IM); здесь t½ = 1 ч.</li>
+        <li><b>Цена резистентности</b>: β-лактамаза TEM-тип, MIC ≥ 64 мг/л; фитнес-цена −10% μmax (типичные оценки 1–15%).</li>
+        <li><b>Открытые системы для углубления</b>: COMETS (github.com/COMETS-bio/COMETS) — пространственные метаболические модели; gro (github.com/runhel/gro); CellModeller. ВетПетри — их сильно упрощённый кубический родственник для пары.</li>
+      </ol>
+    </details>
+
+    <div class="disclaimer">
+      <b>Честные упрощения.</b> Нет: иммунной системы, биоплёнок, горизонтального переноса генов
+      (плазмиды/фаги), метаболизма лекарства в тканях, хозяина вообще. Рост — на плоскости, одна
+      среда, 37 °C; расширение колоний — эффективная подвижность (фронт Кольмогорова), не жгутики.
+      Параметры — приближения из литературы (см. источники), единицы субстрата —
+      условные. Скорость мутации демо-завышена (в реале точечные события ~10⁻⁹–10⁻¹⁰ на п.н./деление,
+      резистентность чаще приходит извне или горизонтально). <b>Не для клинических решений.</b>
+    </div>
+  </aside>
+</main>
+
+<footer class="ftr">ВетПетри · один HTML-файл, без бэкенда и ключей · движок отделён от интерфейса (src/engine.js) · фиксированный seed — запуск воспроизводим · <span class="muted">учебная модель: не для клиники</span></footer>
+
+<script>
+/*__ENGINE__*/
+</script>
+<script>
+/*__TESTS__*/
+</script>
+<script>
+/*__UI__*/
+</script>
+</body>
+</html>

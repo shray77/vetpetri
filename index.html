@@ -1,0 +1,1209 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ВетПетри — научная песочница чашки Петри (вет. микробиология)</title>
+<meta name="description" content="Учебный симулятор чашки Петри с реальными ветеринарными патогенами: кинетика Моно, лаг-фаза по Бараньи, конкуренция видов, time-kill по Хиллу/Emax, окно селекции мутантов. Один HTML, без бэкенда.">
+<meta property="og:title" content="ВетПетри — симулятор чашки Петри">
+<meta property="og:description" content="Моно, Бараньи, Хилл/Emax, окно селекции мутантов — на реальных вет. патогенах. Для пары по микробиологии.">
+<style>
+:root {
+  --bg: #0b0f14; --panel: #121826; --panel2: #0e141f; --line: #223047;
+  --tx: #dbe7f4; --mut: #7d92ad; --acc: #4dd0e1; --violet: #9c7cff;
+  --ok: #7ee38b; --warn: #ffb74d; --bad: #f06292;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--bg); color: var(--tx);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+
+.hdr { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.hdr-title { display: flex; gap: 10px; align-items: center; }
+.hdr h1 { font-size: 19px; margin: 0; font-weight: 700; letter-spacing: .2px; }
+.hdr .sub { color: var(--mut); font-weight: 400; font-size: 14px; }
+.tagline { color: var(--mut); font-size: 12px; margin-top: 2px; }
+.logo { font-size: 26px; }
+.badge { background: var(--panel2); border: 1px solid var(--line); border-radius: 14px;
+  padding: 4px 12px; font-size: 12px; white-space: nowrap; }
+.badge.ok { color: var(--ok); border-color: #2b5c38; }
+.badge.bad { color: var(--bad); border-color: #6b2b3e; }
+
+.wrap { display: grid; grid-template-columns: 1fr 340px; gap: 14px; padding: 14px; max-width: 1400px; margin: 0 auto; }
+.stage { min-width: 0; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; overflow-y: auto; max-height: calc(100vh - 90px); }
+.panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .8px; color: var(--acc); margin: 14px 0 6px; }
+.panel h2:first-child { margin-top: 0; }
+.muted { color: var(--mut); font-weight: 400; text-transform: none; letter-spacing: 0; }
+
+.dish-wrap { position: relative; background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+#dish { display: block; width: 100%; height: auto; cursor: crosshair; }
+.hint { position: absolute; left: 10px; top: 8px; font-size: 12px; color: var(--mut);
+  background: rgba(10,14,20,.65); padding: 3px 10px; border-radius: 10px; pointer-events: none; }
+
+.toolbar, .tools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.tb-sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
+.tb-label { color: var(--mut); font-size: 12px; }
+.btn { background: #182236; color: var(--tx); border: 1px solid var(--line); border-radius: 8px;
+  padding: 6px 14px; font-size: 13px; cursor: pointer; transition: background .15s; }
+.btn:hover { background: #21304c; }
+.btn.primary { background: #155e6d; border-color: #1e7f92; }
+.btn.primary:hover { background: #1a7384; }
+.btn.sm { padding: 3px 10px; font-size: 12px; }
+.sel { background: #182236; color: var(--tx); border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; font-size: 13px; }
+.clock { font-variant-numeric: tabular-nums; color: var(--acc); font-size: 14px; margin-left: auto; }
+
+.tool { border: 1px solid var(--line); background: var(--panel2); border-radius: 8px; padding: 5px 12px; font-size: 13px; cursor: pointer; user-select: none; }
+.tool.active { border-color: var(--acc); color: var(--acc); background: #10222a; }
+
+.charts { margin-top: 10px; background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: 8px; }
+.chart-cap { font-size: 12px; color: var(--mut); margin: 2px 2px 4px; }
+#chart1, #chart2 { display: block; width: 100%; height: auto; margin-bottom: 6px; }
+#legend { margin-left: 8px; }
+#legend .lg { display: inline-block; margin-right: 12px; font-size: 12px; }
+#legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+
+.presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.pbtn { flex: 1 1 45%; background: #182236; border: 1px solid var(--line); color: var(--tx);
+  border-radius: 8px; padding: 7px 8px; font-size: 12.5px; cursor: pointer; text-align: left; }
+.pbtn:hover { background: #21304c; }
+.pbtn.active { border-color: var(--acc); color: var(--acc); background: #10222a; }
+.preset-note { font-size: 12.5px; color: var(--mut); background: var(--panel2); border: 1px solid var(--line);
+  border-radius: 8px; padding: 8px 10px; margin-top: 8px; min-height: 54px; }
+.preset-note b { color: var(--tx); }
+
+.dose-row { margin: 4px 0 2px; }
+input[type=range] { width: 100%; accent-color: var(--violet); }
+.dose-read { font-size: 13px; margin-top: 2px; }
+.dose-read span { color: var(--mut); }
+.dose-zones { display: grid; grid-template-columns: 1fr 1.6fr 1.2fr; border-radius: 4px; overflow: hidden; margin-top: 4px; }
+.dose-zones .z { font-size: 10.5px; text-align: center; padding: 2px 0; color: #06131a; font-weight: 600; }
+.z1 { background: var(--ok); } .z2 { background: var(--warn); } .z3 { background: #a9b6c9; }
+.dose-scale { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--mut); margin-top: 2px; }
+
+.kv { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 0; }
+.kv label { color: var(--mut); font-size: 12.5px; }
+.kv input[type=number], .kv .sel { width: 130px; background: #182236; color: var(--tx);
+  border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; font-size: 13px; }
+.kv .inline { display: flex; gap: 6px; align-items: center; }
+.kv .inline input { width: 90px; }
+
+.sp-row { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; margin-bottom: 6px; background: var(--panel2); }
+.sp-head { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.sp-head input[type=checkbox] { accent-color: var(--acc); }
+.sp-name { font-weight: 600; font-size: 13px; }
+.sp-count { margin-left: auto; font-variant-numeric: tabular-nums; font-size: 12px; }
+.sp-params { display: none; margin-top: 6px; border-top: 1px dashed var(--line); padding-top: 6px; }
+.sp-row.open .sp-params { display: block; }
+.sp-params .kv { margin: 4px 0; }
+.sp-params .kv label { font-size: 11.5px; }
+.sp-params .kv input { width: 86px; }
+.sp-note { font-size: 11px; color: var(--mut); margin-top: 3px; }
+
+.box { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin: 10px 0; background: var(--panel2); }
+.box summary { cursor: pointer; font-size: 13px; color: var(--acc); }
+.box button { margin: 8px 0; }
+#testsOut { font-size: 12px; }
+.t-row { padding: 6px 0; border-top: 1px dashed var(--line); }
+.t-name { font-weight: 600; }
+.t-pass { color: var(--ok); } .t-fail { color: var(--bad); }
+.t-det { color: var(--mut); font-size: 11.5px; }
+.src { font-size: 11.5px; color: var(--mut); padding-left: 18px; margin: 6px 0; }
+.src li { margin-bottom: 6px; }
+.src b { color: var(--tx); }
+
+.disclaimer { border: 1px solid #6b4a12; background: #241a06; border-radius: 8px;
+  padding: 9px 11px; font-size: 11.5px; color: #d8c496; margin-top: 12px; }
+.disclaimer b { color: #ffcf7d; }
+
+.ftr { text-align: center; color: var(--mut); font-size: 11.5px; padding: 10px 16px 20px; }
+
+@media (max-width: 980px) {
+  .wrap { grid-template-columns: 1fr; }
+  .panel { max-height: none; }
+  .clock { margin-left: 0; }
+}
+
+</style>
+</head>
+<body>
+<header class="hdr">
+  <div class="hdr-title">
+    <span class="logo">🧫</span>
+    <div>
+      <h1>ВетПетри <span class="sub">— научная песочница чашки Петри</span></h1>
+      <div class="tagline">Моно · Бараньи (лаг-фаза) · конкуренция · Хилл/Emax (time-kill) · окно селекции мутантов — реальные вет. патогены</div>
+    </div>
+  </div>
+  <div id="modelBadge" class="badge" title="Тесты моделей на известных кривых">модели: проверка…</div>
+</header>
+
+<main class="wrap">
+  <section class="stage">
+    <div class="dish-wrap">
+      <canvas id="dish" width="960" height="600"></canvas>
+      <div id="hint" class="hint">Пресет «Кривая роста» — жми «пуск». Инструменты: посев / капля АБ / стереть.</div>
+    </div>
+
+    <div class="toolbar">
+      <button id="btnPlay" class="btn primary">▶ Пуск</button>
+      <button id="btnStep" class="btn">Шаг +1 ч</button>
+      <button id="btnReset" class="btn">Сброс</button>
+      <span class="tb-sep"></span>
+      <span class="tb-label">Скорость:</span>
+      <select id="selSpeed" class="sel">
+        <option value="0.5">0.5 ч/с — вдумчиво</option>
+        <option value="2">2 ч/с</option>
+        <option value="8" selected>8 ч/с</option>
+        <option value="20">20 ч/с</option>
+        <option value="40">40 ч/с — турбо</option>
+      </select>
+      <span class="tb-sep"></span>
+      <span id="clock" class="clock">t = 0 ч</span>
+    </div>
+
+    <div class="tools">
+      <span class="tb-label">Инструмент:</span>
+      <div id="toolSeed" class="tool active">Посев: <b id="toolSeedName">E. coli</b></div>
+      <div id="toolDrop" class="tool">Капля антибиотика</div>
+      <div id="toolWipe" class="tool">Стереть</div>
+      <span class="tb-sep"></span>
+      <button id="btnLawn" class="btn sm">Газон E. coli</button>
+      <button id="btnBolus" class="btn sm">Болюс АБ всю чашу</button>
+    </div>
+
+    <div class="charts">
+      <div class="chart-cap"><b>КОЕ, log₁₀</b> <span id="legend"></span></div>
+      <canvas id="chart1" width="960" height="170"></canvas>
+      <div class="chart-cap"><b>Среда:</b> субстрат (зелёная, % от S₀) и антибиотик (фиолетовая, мг/л); пунктир — MICwt / MPC</div>
+      <canvas id="chart2" width="960" height="130"></canvas>
+    </div>
+  </section>
+
+  <aside class="panel">
+    <h2>Эксперименты</h2>
+    <div class="presets">
+      <button class="pbtn active" data-p="0">1 · Кривая роста</button>
+      <button class="pbtn" data-p="1">2 · Конкуренция видов</button>
+      <button class="pbtn" data-p="2">3 · Time-kill: одна доза</button>
+      <button class="pbtn" data-p="3">4 · Окно селекции мутантов</button>
+      <button class="pbtn" data-p="4">5 · Песочница</button>
+    </div>
+    <div id="presetNote" class="preset-note"></div>
+
+    <h2>Антибиотик — амоксициллин</h2>
+    <div class="dose-row">
+      <input id="dose" type="range" min="-10" max="241" value="18" step="1">
+      <div class="dose-read"><b id="doseVal">4.0 мг/л</b> <span id="doseX">= 1.0×MICwt</span></div>
+    </div>
+    <div class="dose-zones"><span class="z z1">рост</span><span class="z z2">окно селекции</span><span class="z z3">подавление</span></div>
+    <div class="dose-scale"><span>0.1</span><span id="micTick">MIC 4</span><span id="mpcTick">MPC 32</span><span>256</span></div>
+    <div class="kv"><label>t½ в хозяине, ч</label><input id="kel" type="number" value="1.0" min="0" step="0.1"></div>
+    <div class="kv"><label>Мутации p на деление</label>
+      <select id="pMut" class="sel">
+        <option value="0">выкл</option>
+        <option value="1e-7">10⁻⁷</option>
+        <option value="1e-6" selected>10⁻⁶ (демо)</option>
+        <option value="1e-5">10⁻⁵</option>
+      </select></div>
+
+    <h2>Виды <span class="muted">(реальные параметры — см. источники)</span></h2>
+    <div id="speciesList"></div>
+
+    <h2>Среда и численное</h2>
+    <div class="kv"><label>Глюкоза S₀, мг/л</label><input id="S0" type="number" value="1000" min="50" step="50"></div>
+    <div class="kv"><label>Seed (воспроизводимость)</label><span class="inline"><input id="seed" type="number" value="42" step="1"><button id="btnSeedRnd" class="btn sm">случайный</button></span></div>
+
+    <details id="testsBox" class="box">
+      <summary>Тесты моделей (S-кривая · time-kill · seed · окно селекции)</summary>
+      <button id="btnTests" class="btn">Прогнать заново</button>
+      <div id="testsOut"></div>
+    </details>
+
+    <details class="box">
+      <summary>Источники параметров</summary>
+      <ol class="src">
+        <li><b>Моно</b>: Monod J. (1949) The growth of bacterial cultures. <i>Annu Rev Microbiol</i> 3:371 — μmax, Ks (глюкоза, E. coli: 2–6 мг/л); Ks/ml30 = 53.4 мкг/л (BioNumbers 111051); обзор значений: Kovárová-Kovar &amp; Egli (1998) <i>Microbiol Mol Biol Rev</i>.</li>
+        <li><b>Лаг-фаза</b>: Baranyi J., Roberts T.A. (1994) <i>Int J Food Microbiol</i> 23:277 — q-функция q/(1+q).</li>
+        <li><b>Time-kill, Хилл/Emax</b>: Regoes R.R. et al. (2004) <i>PLoS Biol</i> 2:e230; Nielsen E.I., Friberg L.E. (2006) <i>Antimicrob Agents Chemother</i> (semimechanistic PK/PD); Foerster S. et al. (2016) <i>BMC Microbiol</i> 16:167. β-лактамы: kmax ≈ 2–4 ч⁻¹, H ≈ 1–1.5 (порядок величины).</li>
+        <li><b>MIC</b>: CLSI M100/VET01S, EUCAST — амоксициллин против E. coli WT: ECOFF ≤ 8 мг/л (здесь 4 — типичный WT); Pasteurella: S ≤ 0.5 (ампициллин, CLSI vet); Salmonella: прокси по ампициллину (S ≤ 8).</li>
+        <li><b>Окно селекции/MPC</b>: Drlica K., Zhao X. (2003) <i>J Antimicrob Chemother</i> 52:11; Drlica K. (2007) <i>Clin Infect Dis</i> 45:S129. MPC ≈ 4–8×MIC (для β-лактамов — оценка, взято 8×).</li>
+        <li><b>PK амоксициллина у КРС</b>: Kreil V.E. et al. (2012) <i>Comp Immunol Microbiol Infect Dis</i> — t½ ≈ 0.86 ± 0.3 ч (натриевая соль, IM); здесь t½ = 1 ч.</li>
+        <li><b>Цена резистентности</b>: β-лактамаза TEM-тип, MIC ≥ 64 мг/л; фитнес-цена −10% μmax (типичные оценки 1–15%).</li>
+        <li><b>Открытые системы для углубления</b>: COMETS (github.com/COMETS-bio/COMETS) — пространственные метаболические модели; gro (github.com/runhel/gro); CellModeller. ВетПетри — их сильно упрощённый кубический родственник для пары.</li>
+      </ol>
+    </details>
+
+    <div class="disclaimer">
+      <b>Честные упрощения.</b> Нет: иммунной системы, биоплёнок, горизонтального переноса генов
+      (плазмиды/фаги), метаболизма лекарства в тканях, хозяина вообще. Рост — на плоскости, одна
+      среда, 37 °C; расширение колоний — эффективная подвижность (фронт Кольмогорова), не жгутики.
+      Параметры — приближения из литературы (см. источники), единицы субстрата —
+      условные. Скорость мутации демо-завышена (в реале точечные события ~10⁻⁹–10⁻¹⁰ на п.н./деление,
+      резистентность чаще приходит извне или горизонтально). <b>Не для клинических решений.</b>
+    </div>
+  </aside>
+</main>
+
+<footer class="ftr">ВетПетри · один HTML-файл, без бэкенда и ключей · движок отделён от интерфейса (src/engine.js) · фиксированный seed — запуск воспроизводим · <span class="muted">учебная модель: не для клиники</span></footer>
+
+<script>
+/*
+ * ВетПетри — движок симулятора чашки Петри (чистый модуль, без DOM).
+ *
+ * Слои модели (в порядке включения, как в учебной задаче):
+ *   1) сетка с субстратом + диффузия (Нейман, явная схема)
+ *   2) один вид: рост по Моно (μmax·S/(Ks+S)) с лаг-фазой по Бараньи–Робертс (q-функция)
+ *      + локальная логистическая конкуренция за место (Nmax на ячейку)
+ *   3) второй вид: та же динамика, общая ёмкость ячейки = эксплуатационная конкуренция
+ *      (аналог Лотки–Вольтерры с общим ресурсом)
+ *   4) антибиотик: диффузия + элиминация (kel), гибель по Хиллу/Emax (Regoes 2004 /
+ *      Nielsen & Friberg 2006); C50 автокалибруется так, чтобы net-рост = 0 при A = MIC
+ *   5) мутации: поток wt→res при делении (p_mut на деление, демо-значение)
+ *
+ * Вход: параметры + seed (mulberry32). Выход: состояние (typed arrays) + статистика.
+ * Фиксированный seed + фиксированный порядок обхода => воспроизводимый запуск.
+ *
+ * Единицы: время — часы; S — мг/л (глюкоза, усл.); A — мг/л; N — КОЕ на ячейку сетки.
+ * Ячейка сетки ~0.25 мм; локальная ёмкость Nmax = 1e8 КОЕ (калибровка, см. README).
+ */
+(function (root, factory) {
+  if (typeof module !== 'undefined' && module.exports) module.exports = factory();
+  else root.VetPetriEngine = factory();
+})(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+
+  // ---------- ГСЧ с фиксированным сидом (mulberry32) ----------
+  function mulberry32(seed) {
+    let a = seed >>> 0;
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  // ---------- Виды (реальные вет. патогены, параметры — из литературы, см. README) ----------
+  // muMax: 1/ч (37 °C, богатая среда); Ks: мг/л (Monod 1949 / Kovárová-Kovar & Egli 1998);
+  // MIC: мг/л амоксициллина (CLSI/EUCAST; у Salmonella — прокси по ампициллину);
+  // kd: скорость отмирания при истощении субстрата (порядок 0.05–0.15 1/ч);
+  // kmax/H: фармакодинамика time-kill (Regoes 2004, Nielsen & Friberg 2006).
+  const SPECIES_DEFAULTS = [
+    {
+      id: 'eco', name: 'E. coli', latin: 'Escherichia coli',
+      host: 'телята, птица — колибактериоз',
+      muMax: 2.1,   // td ≈ 20 мин (богатая среда, 37 °C)
+      Ks: 4,        // Monod 1949: Ks глюкозы 2–6 мг/л
+      MIC: 4,       // WT типично 2–8 мг/л (ECOFF ≤8)
+      kd: 0.08,
+      kmax: 3.0, H: 1.2, // β-лактамы: time-dependent, kmax ~2–4 1/ч
+      color: [77, 208, 225], css: '#4dd0e1',
+      resSource: -1, // не мутант
+    },
+    {
+      id: 'sdu', name: 'Salmonella Dublin', latin: 'Salmonella enterica sv. Dublin',
+      host: 'телята — септицемия, дизентерия',
+      muMax: 1.4,   // td ≈ 30 мин
+      Ks: 6,
+      MIC: 4,       // прокси по ампициллину (CLSI S ≤8) — честная пометка
+      kd: 0.08,
+      kmax: 2.8, H: 1.2,
+      color: [255, 183, 77], css: '#ffb74d',
+      resSource: -1,
+    },
+    {
+      id: 'pmu', name: 'P. multocida', latin: 'Pasteurella multocida',
+      host: 'КРС — респираторный синдром, пастереллёз',
+      muMax: 1.0,   // td ≈ 42 мин
+      Ks: 6,
+      MIC: 0.25,    // очень чувствителен (ампициллин S ≤0.5, CLSI vet)
+      kd: 0.1,
+      kmax: 3.0, H: 1.2,
+      color: [174, 213, 129], css: '#aed581',
+      resSource: -1,
+    },
+    {
+      id: 'ecor', name: 'E. coli R (β-лактамаза)', latin: 'E. coli, TEM-тип',
+      host: 'мутант E. coli с β-лактамазой (цена: рост −10%)',
+      muMax: 1.9,   // фитнес-цена резистентности ~10%
+      Ks: 4,
+      MIC: 64,      // β-лактамаза (низкопродуцирующий TEM-вариант): ≥64 мг/л
+      kd: 0.08,
+      kmax: 3.0, H: 1.2,
+      color: [240, 98, 146], css: '#f06292',
+      resSource: 0, // мутант E. coli
+    },
+  ];
+
+  // ---------- Параметры среды/антибиотика ----------
+  const ENV_DEFAULTS = {
+    S0: 1000,        // мг/л глюкозы в агаре (засев среды)
+    Y: 1e5,          // выход: КОЕ на (мг/л · ячейку) — калибровка плато
+    Nmax: 1e8,       // локальная ёмкость ячейки, КОЕ
+    DS: 5.0,         // диффузия субстрата (эфф., усл.)
+    DA: 3.5,         // диффузия антибиотика
+    kel: 0.69,       // элиминация АБ, 1/ч (t½ ≈ 1 ч, КРС IM — Kreil 2012: 0.86±0.3)
+    pMut: 1e-6,      // мутаций на деление wt→R (ДЕМО: завышено для наглядности)
+    recycle: 0.9,    // доля биомассы, возвращаемая лизисом в субстрат (криптический рост)
+    noise: 0.12,     // демографический шум (амплитуда), RNG от seed
+    q0: 0.02,        // начальное физиологическое состояние (лаг-фаза, Бараньи)
+    motility: 0.5,   // эффективная подвижность, ячейка²/ч — фронт колоний (Кольмогоров–Фишер)
+    growthKillCoupling: true, // β-лактамы убивают делящиеся клетки
+  };
+
+  const MPC_FACTOR = 8; // MPC ≈ 8×MIC (Drlica & Zhao 2003/2007; для β-лактамов — оценка)
+
+  // ---------- Конструктор состояния ----------
+  function createState(cfg) {
+    const W = cfg.W | 0, H = cfg.H | 0;
+    const n = W * H;
+    const species = cfg.species.map(function (s) { return Object.assign({}, s); });
+    const env = Object.assign({}, ENV_DEFAULTS, cfg.env || {});
+    const st = {
+      W: W, H: H, n: n,
+      species: species,
+      env: env,
+      enabled: cfg.enabled.map(function (x) { return !!x; }),
+      S: new Float32Array(n), A: new Float32Array(n),
+      N: species.map(function () { return new Float32Array(n); }),
+      q: species.map(function () { return env.q0; }), // Бараньи q, глобально на вид
+      t: 0,
+      cx: (W - 1) / 2, cy: (H - 1) / 2,
+      R: Math.min(W, H) / 2 - 1.5,  // радиус чашки в ячейках
+      seed: cfg.seed >>> 0,
+      _rng: null, _tmpS: new Float32Array(n), _tmpA: new Float32Array(n),
+      _wellMixed: !!cfg.wellMixed, // 0D-режим для тестов time-kill (без диффузии)
+      mask: null, // 1 = внутри чашки (для обнуления N вне чашки после дисперсии)
+    };
+    st._rng = mulberry32(st.seed);
+    // среда: субстрат везде в чашке, вне чашки — 0
+    st.mask = new Uint8Array(n);
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const i = y * W + x;
+        const ins = inside(st, x, y);
+        st.mask[i] = ins ? 1 : 0;
+        st.S[i] = ins ? env.S0 : 0;
+      }
+    }
+    return st;
+  }
+
+  function inside(st, x, y) {
+    const dx = x - st.cx, dy = y - st.cy;
+    return dx * dx + dy * dy <= st.R * st.R;
+  }
+
+  // C50 (концентрация полумаксимальной гибели) из MIC: net-рост = 0 при A = MIC
+  // g − kd = kmax·MIC^H/(MIC^H + C50^H)  =>  C50 = MIC·(kmax/g − 1)^(1/H)
+  function c50Of(sp, env) {
+    const g = Math.max(0.2, sp.muMax - sp.kd);
+    if (sp.kmax <= g) return sp.MIC * 1e3; // kill слабее роста — MIC не достигается
+    return sp.MIC * Math.pow(sp.kmax / g - 1, 1 / sp.H);
+  }
+
+  // ---------- Инокуляция / инструменты ----------
+  // blob: гауссова капля вида s в (x,y), total CFU, радиус r ячеек
+  function inoculate(st, s, x, y, totalCfu, r) {
+    const N = st.N[s];
+    const r2 = r * r; let wsum = 0;
+    const x0 = Math.max(0, Math.floor(x - r)), x1 = Math.min(st.W - 1, Math.ceil(x + r));
+    const y0 = Math.max(0, Math.floor(y - r)), y1 = Math.min(st.H - 1, Math.ceil(y + r));
+    const w = [];
+    for (let yy = y0; yy <= y1; yy++) for (let xx = x0; xx <= x1; xx++) {
+      const d2 = (xx - x) * (xx - x) + (yy - y) * (yy - y);
+      if (d2 > r2 || !inside(st, xx, yy)) continue;
+      const wv = Math.exp(-d2 / (r2 / 2)); w.push(yy * st.W + xx); w.push(wv); wsum += wv;
+    }
+    if (wsum <= 0) return;
+    for (let k = 0; k < w.length; k += 2) N[w[k]] += totalCfu * w[k + 1] / wsum;
+    st.q[s] = Math.max(st.q[s], st.env.q0);
+  }
+
+  // газон: равномерный засев всей чашки
+  function lawn(st, s, totalCfu) {
+    let area = 0;
+    for (let i = 0; i < st.n; i++) if (st.S[i] > 0) area++;
+    const per = totalCfu / area;
+    for (let i = 0; i < st.n; i++) if (st.S[i] > 0) st.N[s][i] += per;
+  }
+
+  // капля антибиотика (гаусс), total — мг/л в пике (нормируем на пик)
+  function dropAB(st, x, y, peak, r) {
+    const r2 = r * r;
+    const x0 = Math.max(0, Math.floor(x - r)), x1 = Math.min(st.W - 1, Math.ceil(x + r));
+    const y0 = Math.max(0, Math.floor(y - r)), y1 = Math.min(st.H - 1, Math.ceil(y + r));
+    for (let yy = y0; yy <= y1; yy++) for (let xx = x0; xx <= x1; xx++) {
+      const i = yy * st.W + xx;
+      if (!st.S[i] && st.A[i] === 0) { /* вне чашки не держим */ }
+      const d2 = (xx - x) * (xx - x) + (yy - y) * (yy - y);
+      if (d2 > r2) continue;
+      st.A[i] = Math.max(st.A[i], peak * Math.exp(-d2 / (r2 / 2)));
+    }
+  }
+
+  // болюс: мгновенно всю чашку до концентрации dose
+  function bolusAB(st, dose) {
+    for (let i = 0; i < st.n; i++) if (st.S[i] > 0 || st.A[i] > 0) st.A[i] = Math.max(st.A[i], dose);
+  }
+
+  // ---------- Диффузия (явная схема, Нейман — без потока через край) ----------
+  function diffuse(arr, tmp, W, H, D, dt, sub) {
+    const d = D * dt / sub;
+    if (d * 4 > 0.45) throw new Error('diffusion unstable: ' + d);
+    for (let s = 0; s < sub; s++) {
+      tmp.set(arr);
+      for (let y = 0; y < H; y++) {
+        const yn = y > 0 ? y - 1 : 0, yp = y < H - 1 ? y + 1 : H - 1;
+        for (let x = 0; x < W; x++) {
+          const i = y * W + x;
+          const xn = x > 0 ? x - 1 : 0, xp = x < W - 1 ? x + 1 : W - 1;
+          const lap = tmp[yn * W + x] + tmp[yp * W + x] + tmp[y * W + xn] + tmp[y * W + xp] - 4 * tmp[i];
+          arr[i] = tmp[i] + d * lap;
+        }
+      }
+    }
+  }
+
+  // ---------- Один шаг по времени (dt, ч) ----------
+  function step(st, dt) {
+    const env = st.env, W = st.W, H = st.H, n = st.n;
+    const rng = st._rng;
+
+    // 1) диффузия субстрата и антибиотика
+    if (!st._wellMixed) {
+      const subS = Math.max(1, Math.ceil(env.DS * dt / 0.11));
+      const subA = Math.max(1, Math.ceil(env.DA * dt / 0.11));
+      diffuse(st.S, st._tmpS, W, H, env.DS, dt, subS);
+      diffuse(st.A, st._tmpA, W, H, env.DA, dt, subA);
+    }
+
+    // 2) элиминация антибиотика (первый порядок)
+    const dec = Math.exp(-env.kel * dt);
+    if (env.kel > 0) for (let i = 0; i < n; i++) st.A[i] *= dec;
+
+    // 3) среднее по чашке (для глобального q — упрощение Бараньи, помечено в README)
+    let sSum = 0, area = 0;
+    for (let i = 0; i < n; i++) if (st.S[i] > 0) { sSum += st.S[i]; area++; }
+    const sMean = area > 0 ? sSum / area : 0;
+
+    // 4) рост/гибель по видам
+    const Nmax = env.Nmax, Y = env.Y;
+    const c50 = st._c50 || (st._c50 = st.species.map(function (sp) { return c50Of(sp, env); }));
+    const newQ = st.q.slice();
+    for (let s = 0; s < st.species.length; s++) {
+      if (!st.enabled[s]) continue;
+      const sp = st.species[s];
+      const N = st.N[s];
+      const muS = sp.muMax * sMean / (sp.Ks + sMean);        // Моно от среднего S (для q)
+      newQ[s] = st.q[s] * (1 + muS * dt);                    // dq/dt = μ(S)·q
+      const lagF = st.q[s] / (1 + st.q[s]);                  // q/(1+q): лаг-фаза
+      const c50s = c50[s], Hs = sp.H;
+
+      for (let i = 0; i < n; i++) {
+        const Si = st.S[i];
+        if (Si <= 0 && N[i] <= 0) continue;
+        const Ni = N[i];
+        if (Ni <= 0) continue;
+
+        // локальный рост: Моно × Бараньи × логистика (общая ёмкость ячейки)
+        let Ntot = 0;
+        for (let k = 0; k < st.N.length; k++) if (st.enabled[k]) Ntot += st.N[k][i];
+        const crow = 1 - Ntot / Nmax;
+        const g = crow <= 0 ? 0
+          : sp.muMax * lagF * (Si / (sp.Ks + Si)) * crow;    // 1/ч
+
+        // демографический шум (seed-воспроизводимый)
+        let gg = g;
+        if (env.noise > 0) gg *= 1 + env.noise * (rng() * 2 - 1);
+        if (gg < 0) gg = 0;
+
+        // гибель от антибиотика: Хилл/Emax; β-лактамы — по делящимся клеткам
+        // (связь с локальным субстратом: в голодных зонах убивают слабее — «персистеры»)
+        let kill = sp.kmax * Math.pow(st.A[i], Hs) / (Math.pow(st.A[i], Hs) + c50s);
+        if (env.growthKillCoupling) kill *= 0.2 + 0.8 * (Si / (sp.Ks + Si));
+
+        const deaths = (kill + sp.kd) * Ni * dt;
+        let dN = gg * Ni * dt - deaths;
+        // мутация: поток wt → R при делении
+        if (sp.resSource < 0 && st.enabled[3] && st.species[3].resSource === s && env.pMut > 0 && gg > 0) {
+          const dRes = gg * Ni * env.pMut * dt;
+          st.N[3][i] += dRes;
+          dN -= dRes;
+        }
+        N[i] += dN;
+        if (N[i] < 1e-2) N[i] = 0; // порог вымирания
+        // лизис возвращает часть биомассы в субстрат (криптический рост):
+        // иначе получается перелёт и обвал вместо плато + медленного отмирания
+        if (deaths > 0) st.S[i] = Math.min(st.env.S0, st.S[i] + env.recycle * deaths / Y);
+        if (gg > 0) st.S[i] = Math.max(0, st.S[i] - (gg * Ni / Y) * dt);
+      }
+    }
+    st.q = newQ;
+
+    // 5) дисперсия клеток (подвижность): фронт колоний расползается (Кольмогоров–Фишер)
+    if (!st._wellMixed && env.motility > 0) {
+      const dN = env.motility * dt; // ≤ 0.11 — устойчиво
+      if (dN * 4 > 0.45) throw new Error('motility unstable: ' + dN);
+      for (let s = 0; s < st.species.length; s++) {
+        if (!st.enabled[s]) continue;
+        diffuse(st.N[s], st._tmpS, W, H, env.motility, dt, 1);
+        const Ns = st.N[s];
+        for (let i = 0; i < n; i++) if (!st.mask[i]) Ns[i] = 0; // не выходим за чашку
+      }
+    }
+
+    st.t += dt;
+  }
+
+  // ---------- Статистика ----------
+  function stats(st) {
+    const out = { t: st.t, totals: new Array(st.species.length).fill(0), S: 0, A: 0, Amax: 0, area: 0 };
+    for (let i = 0; i < st.n; i++) {
+      if (st.S[i] > 0) { out.area++; out.S += st.S[i]; }
+      if (st.A[i] > out.Amax) out.Amax = st.A[i];
+      out.A += st.A[i];
+      for (let s = 0; s < st.species.length; s++) out.totals[s] += st.N[s][i];
+    }
+    out.S /= (out.area || 1); out.A /= (out.area || 1);
+    const wt = out.totals[0] || 0, res = out.totals[3] || 0;
+    out.resFrac = (wt + res) > 0 ? res / (wt + res) : 0;
+    return out;
+  }
+
+  function hashState(st) { // воспроизводимость: числовой хэш состояния
+    let h = 2166136261 >>> 0;
+    function mix(v) {
+      const x = Math.round(v * 1e6) | 0;
+      h = (Math.imul(h ^ x, 16777619)) >>> 0;
+    }
+    for (let i = 0; i < st.n; i += 7) {
+      mix(st.S[i]);
+      for (let s = 0; s < st.N.length; s++) mix(st.N[s][i]);
+    }
+    return h.toString(16);
+  }
+
+  return {
+    mulberry32: mulberry32,
+    SPECIES: SPECIES_DEFAULTS,
+    ENV: ENV_DEFAULTS,
+    MPC_FACTOR: MPC_FACTOR,
+    c50Of: c50Of,
+    createState: createState,
+    inside: inside,
+    inoculate: inoculate,
+    lawn: lawn,
+    dropAB: dropAB,
+    bolusAB: bolusAB,
+    step: step,
+    stats: stats,
+    hashState: hashState,
+  };
+});
+
+</script>
+<script>
+/*
+ * ВетПетри — тесты моделей на известных кривых (0D/малая сетка, без DOM).
+ * Гоняются в node (node src/tests.js) и в браузере (панель «Тесты моделей»).
+ * Каждый тест возвращает {name, pass, details}.
+ */
+(function (root, factory) {
+  if (typeof module !== 'undefined' && module.exports) module.exports = factory(require('./engine.js'));
+  else root.VetPetriTests = factory(root.VetPetriEngine);
+})(typeof self !== 'undefined' ? self : this, function (E) {
+  'use strict';
+
+  function mk(cfg) {
+    return E.createState(Object.assign({
+      W: 20, H: 12, seed: 42,
+      species: E.SPECIES,
+      enabled: [true, false, false, false],
+      wellMixed: true,
+    }, cfg));
+  }
+
+  // Т1. S-образная кривая роста (Моно + Бараньи): лаг → экспонента → плато,
+  //     баланс массы: прирост ≈ Y·израсходованный субстрат.
+  function testGrowth() {
+    const st = mk({ env: { noise: 0 } });
+    const area = (function () { let a = 0; for (let i = 0; i < st.n; i++) if (st.S[i] > 0) a++; return a; })();
+    E.lawn(st, 0, 1e6); // N0 = 1e6 КОЕ суммарно
+    const cap = area * st.env.Nmax; // = area·S0·Y при S0=1000, Y=1e5
+    let t2x = null, peak = 0;
+    while (st.t < 24) {
+      E.step(st, 0.02);
+      const tot = E.stats(st).totals[0];
+      if (t2x === null && tot >= 2e6) t2x = st.t;
+      if (tot > peak) peak = tot;
+    }
+    const fin = E.stats(st).totals[0];
+    const plateauOk = peak > cap * 0.7 && fin > cap * 0.5; // плато ≈ выходу Y·S0, отмирание медленное
+    const lagOk = t2x !== null && t2x > 0.8; // без лаг-фазы было бы ~0.33 ч
+    const sLeft = E.stats(st).S;
+    return {
+      name: 'S-кривая роста (лаг/экспонента/плато/отмирание, баланс массы)',
+      pass: plateauOk && lagOk && sLeft < st.env.S0 * 0.05,
+      details: 'N0=1e6 → пик ' + peak.toExponential(2) + ', финал(24ч) ' + fin.toExponential(2) +
+        ' (ёмкость ' + cap.toExponential(2) + '), лаг до ×2 = ' + (t2x || -1).toFixed(2) + ' ч' +
+        ', субстрат остаток ' + (sLeft / st.env.S0 * 100).toFixed(1) + '%',
+    };
+  }
+
+  // Т2. Time-kill (Хилл/Emax): C >> MIC — лог-линейная гибель; C << MIC — рост.
+  function testTimeKill() {
+    function run(dose) {
+      const st = mk({ env: { noise: 0, kel: 0 } }); // устойчивая концентрация
+      E.lawn(st, 0, 1e6);
+      if (dose > 0) E.bolusAB(st, dose);
+      const n0 = 1e6; let n6 = null;
+      while (st.t < 6) { E.step(st, 0.01); }
+      n6 = E.stats(st).totals[0];
+      return Math.log10(n6 / n0) / 6; // log10(КОЕ)/ч
+    }
+    const slopeHi = run(10 * 4);   // 10×MIC = 40 мг/л
+    const slopeLo = run(0.1 * 4);  // 0.1×MIC
+    const killOk = slopeHi < -0.3; // β-лактам: быстрый лог-линейный спад
+    const growOk = slopeLo > 0.05;
+    return {
+      name: 'Time-kill по Хиллу: 10×MIC убивает, 0.1×MIC растёт',
+      pass: killOk && growOk,
+      details: 'наклон при 40 мг/л: ' + slopeHi.toFixed(2) + ' log10/ч; при 0.4 мг/л: ' + slopeLo.toFixed(2) + ' log10/ч',
+    };
+  }
+
+  // Т3. Воспроизводимость: одинаковый seed → идентичное состояние; разный → различие.
+  function testSeed() {
+    function run(seed) {
+      const st = mk({
+        W: 24, H: 14, seed: seed, wellMixed: false,
+        enabled: [true, false, false, true],
+        env: { noise: 0.3, pMut: 1e-5, kel: 0.5 },
+      });
+      E.lawn(st, 0, 1e7);
+      E.inoculate(st, 3, st.cx, st.cy - 3, 1e4, 3);
+      E.bolusAB(st, 6);
+      for (let k = 0; k < 150; k++) E.step(st, 0.05);
+      return E.hashState(st);
+    }
+    const a = run(777), b = run(777), c = run(778);
+    return {
+      name: 'Воспроизводимость (фиксированный seed)',
+      pass: a === b && a !== c,
+      details: 'seed 777: ' + a + ' == seed 777: ' + b + ', seed 778: ' + c + ' отличается: ' + (a !== c),
+    };
+  }
+
+  // Т4. Окно селекции мутантов (Drlica): MICwt=4, MPC=32, MICres=64.
+  //     Доза в окне (8) → резистентные вытесняют; доза >MPCres (256) → оба подавлены;
+  //     доза < MICwt (0.5) → растут оба.
+  function testSelectionWindow() {
+    function run(dose) {
+      const st = mk({
+        seed: 9, enabled: [true, false, false, true],
+        env: { noise: 0, kel: 0, pMut: 0 },
+      });
+      E.lawn(st, 0, 1e6);
+      E.lawn(st, 3, 1e4); // 1% резистентных
+      if (dose > 0) E.bolusAB(st, dose);
+      while (st.t < 20) E.step(st, 0.05);
+      const s = E.stats(st);
+      return { wt: s.totals[0], res: s.totals[3], frac: s.resFrac };
+    }
+    const lo = run(0.5), win = run(8), hi = run(256);
+    const growBoth = lo.wt > 1e6 && lo.res > 1e4;              // ниже MICwt растут оба
+    const resWins = win.frac > 0.9 && win.res > 10 * 1e4;      // в окне R доминирует
+    const hiKills = hi.wt < 0.1 * 1e6 && hi.res < 0.1 * 1e4;    // выше MPC подавлены оба
+    return {
+      name: 'Окно селекции: 8 мг/л (в окне) → R вытесняет wt; 256 мг/л (>MPC) → оба подавлены',
+      pass: growBoth && resWins && hiKills,
+      details: '0.5 мг/л: wt ' + lo.wt.toExponential(1) + ', R ' + lo.res.toExponential(1) +
+        '; 8 мг/л: доля R ' + (win.frac * 100).toFixed(1) + '%; 256 мг/л: wt ' + hi.wt.toExponential(1) +
+        ', R ' + hi.res.toExponential(1),
+    };
+  }
+
+  function runAll() {
+    const tests = [testGrowth, testTimeKill, testSeed, testSelectionWindow];
+    return tests.map(function (f) {
+      try { return f(); }
+      catch (e) { return { name: f.name, pass: false, details: 'ошибка: ' + e.message }; }
+    });
+  }
+
+  return { runAll: runAll };
+});
+
+
+</script>
+<script>
+/*
+ * ВетПетри — интерфейс: рендер чаши (Canvas), инструменты, пресеты-эксперименты,
+ * графики, панель параметров, интеграция тестов. Движок — отдельно (src/engine.js).
+ */
+(function () {
+  'use strict';
+  const E = window.VetPetriEngine, T = window.VetPetriTests;
+  const $ = function (id) { return document.getElementById(id); };
+
+  const W = 128, H = 80, DT = 0.02;
+  const SUP = { '0': '\u2070', '1': '\u00b9', '2': '\u00b2', '3': '\u00b3', '4': '\u2074', '5': '\u2075', '6': '\u2076', '7': '\u2077', '8': '\u2078', '9': '\u2079', '-': '\u207b' };
+  function sup(n) { return String(n).split('').map(function (c) { return SUP[c] || c; }).join(''); }
+  function fmtExp(x) { // 1.2e9 → "1.2·10⁹"
+    if (!(x > 0.999)) return '0';
+    const e = Math.floor(Math.log10(x));
+    const m = x / Math.pow(10, e);
+    return (m >= 9.95 ? '10' : m.toFixed(1)) + '\u00b710' + sup(e);
+  }
+
+  const dish = $('dish'), dctx = dish.getContext('2d');
+  const off = document.createElement('canvas'); off.width = W; off.height = H;
+  const octx = off.getContext('2d');
+  const img = octx.createImageData(W, H);
+
+  let st = null, playing = false, speed = 8, tool = { kind: 'seed', sp: 0 };
+  let history = [], lastPush = -1, frameNo = 0, curPreset = 0;
+
+  // ---------- параметры видов из UI ----------
+  function uiSpecies() {
+    const list = [];
+    for (let i = 0; i < E.SPECIES.length; i++) {
+      const sp = E.SPECIES[i];
+      list.push(Object.assign({}, sp, {
+        muMax: parseFloat($('sp-mu-' + i).value) || sp.muMax,
+        MIC: parseFloat($('sp-mic-' + i).value) || sp.MIC,
+        enabled: $('sp-en-' + i).checked,
+      }));
+    }
+    return list;
+  }
+
+  function readUIEnv() {
+    const half = Math.max(0, parseFloat($('kel').value) || 0);
+    return {
+      S0: Math.max(50, parseFloat($('S0').value) || 1000),
+      kel: half > 0 ? Math.LN2 / half : 0,
+      pMut: parseFloat($('pMut').value) || 0,
+    };
+  }
+
+  function buildState() {
+    const species = uiSpecies();
+    const enabled = species.map(function (s) { return s.enabled; });
+    const s = E.createState({
+      W: W, H: H, seed: (parseInt($('seed').value, 10) || 42) >>> 0,
+      species: species, enabled: enabled, env: readUIEnv(),
+    });
+    return s;
+  }
+
+  // ---------- пресеты-эксперименты ----------
+  const PRESETS = [
+    {
+      name: 'Кривая роста',
+      note: '<b>Кинетика Моно на одном виде.</b> Капля E. coli в чистой чаше: лаг-фаза (~2 ч, адаптация по Бараньи) → экспонента (удвоение ~20 мин) → плато (субстрат исчерпан, выход ≈ Y·S\u2080) → медленное отмирание. На нижнем графике зелёная кривая — субстрат тает по мере роста.',
+      ui: function () {
+        $('sp-en-0').checked = true; $('sp-en-1').checked = false; $('sp-en-2').checked = false; $('sp-en-3').checked = false;
+        $('kel').value = 1.0; $('pMut').value = '0';
+      },
+      setup: function (s) {
+        E.inoculate(s, 0, s.cx, s.cy, 1e6, 4);
+      },
+    },
+    {
+      name: 'Конкуренция видов',
+      note: '<b>Два вида против общего субстрата</b> (эксплуатационная конкуренция, родственник Лотки–Вольтерры с общим ресурсом). E. coli (быстрорастущий) против Salmonella Dublin. Следи за границей колоний: кто первым захватывает субстрат, тот и давит соседа.',
+      ui: function () {
+        $('sp-en-0').checked = true; $('sp-en-1').checked = true; $('sp-en-2').checked = false; $('sp-en-3').checked = false;
+        $('kel').value = 1.0; $('pMut').value = '0';
+      },
+      setup: function (s) {
+        E.inoculate(s, 0, s.cx - s.R * 0.45, s.cy, 5e6, 4);
+        E.inoculate(s, 1, s.cx + s.R * 0.45, s.cy, 5e6, 4);
+      },
+    },
+    {
+      name: 'Time-kill: одна доза',
+      note: '<b>Фармакодинамика амоксициллина (Хилл/Emax).</b> Газон E. coli + болюс. Кривая КОЕ: лог-линейный спад (kmax \u2248 3 ч\u207b\u00b9), потом регроу, когда концентрация (фиолетовая) падает ниже MIC. Двигай дозу: ниже MIC — регроу сразу; сильно выше — длинное плато гибели. β-лактамы убивают делящиеся — в голодных зонах слабее.',
+      ui: function () {
+        $('sp-en-0').checked = true; $('sp-en-1').checked = false; $('sp-en-2').checked = false; $('sp-en-3').checked = false;
+        $('kel').value = 1.0; $('pMut').value = '0';
+      },
+      setup: function (s) {
+        E.lawn(s, 0, 1e7);
+        E.bolusAB(s, doseVal());
+      },
+    },
+    {
+      name: 'Окно селекции мутантов',
+      note: '<b>Почему «средняя доза» растит резистентность (Drlica).</b> Газон E. coli + 1% мутанта (MIC 64, цена: рост −10%). Концентрация поддерживается (t½ → ∞, «инфузия»). Доза в окне селекции (MICwt = 4 … MPC = 32): wt подавлен, мутант растёт → доля R → 100%. Доза выше MPC мутанта (256): подавлены оба. Доза ниже MIC: растут оба. Верни t½ = 1 ч — увидишь, как болюс проходит через окно и wt отрастает.',
+      ui: function () {
+        $('sp-en-0').checked = true; $('sp-en-1').checked = false; $('sp-en-2').checked = false; $('sp-en-3').checked = true;
+        $('kel').value = 0; $('pMut').value = '0';
+      },
+      setup: function (s) {
+        E.lawn(s, 0, 1e7); E.lawn(s, 3, 1e5);
+        E.bolusAB(s, 8); // внутри окна селекции
+        setDoseSlider(8);
+      },
+    },
+    {
+      name: 'Песочница',
+      note: '<b>Свободная игра.</b> Клик по инструменту «Посев» циклически меняет вид; капля антибиотика берёт дозу из слайдера — вокруг капли возникает градиент концентраций, и на границе «рост/гибель» можно ловить окно селекции вручную. Включи мутации 10\u207b\u2076 и понаблюдай.',
+      ui: function () {
+        $('sp-en-0').checked = true; $('sp-en-1').checked = true; $('sp-en-2').checked = true; $('sp-en-3').checked = false;
+        $('kel').value = 1.0; $('pMut').value = '1e-6';
+      },
+      setup: function (s) {},
+    },
+  ];
+
+  // ---------- доза ----------
+  function doseVal() { return Math.pow(10, parseInt($('dose').value, 10) / 100); }
+  function setDoseSlider(v) { $('dose').value = Math.round(100 * Math.log10(Math.max(0.1, Math.min(256, v)))); updateDoseUI(); }
+  function updateDoseUI() {
+    const d = doseVal(), x = d / E.SPECIES[0].MIC;
+    $('doseVal').textContent = (d >= 10 ? d.toFixed(0) : d.toFixed(1)) + ' мг/л';
+    $('doseX').textContent = '= ' + (x >= 10 ? x.toFixed(0) : x.toFixed(1)) + '\u00d7MICwt';
+  }
+
+  // ---------- сброс/пуск ----------
+  function applyPreset(idx) {
+    curPreset = idx;
+    document.querySelectorAll('.pbtn').forEach(function (b) { b.classList.toggle('active', +b.dataset.p === idx); });
+    $('presetNote').innerHTML = PRESETS[idx].note;
+    if (PRESETS[idx].ui) PRESETS[idx].ui(); // сначала UI-поля, потом buildState их прочитает
+    resetSim();
+  }
+
+  function resetSim() {
+    st = buildState();
+    PRESETS[curPreset].setup(st);
+    history = []; lastPush = -1;
+    playing = false; $('btnPlay').textContent = '\u25b6 Пуск';
+    pushHistory(true);
+    render();
+    drawCharts();
+    updateLegend();
+    updateClock();
+  }
+
+  function pushHistory(force) {
+    if (!force && st.t - lastPush < 0.1) return;
+    lastPush = st.t;
+    const s = E.stats(st);
+    history.push({ t: s.t, tot: s.totals.slice(), S: s.S, A: s.A });
+    if (history.length > 2600) history = history.filter(function (_, i) { return i % 2 === 0; });
+  }
+
+  // ---------- рендер чаши ----------
+  function render() {
+    const d = img.data, S = st.S, A = st.A, N = st.N, S0 = st.env.S0;
+    const spc = st.species, en = st.enabled, Nmax = st.env.Nmax;
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const i = y * W + x, p = i * 4;
+        if (!E.inside(st, x, y)) { d[p + 3] = 0; continue; }
+        // агар: голодный тёмный → сытый зеленоватый
+        const fed = Math.min(1, S[i] / S0);
+        let r = 22 + fed * 14, g = 27 + fed * 26, b = 34 + fed * 10;
+        // клетки: смесь цветов по долям, яркость по log плотности
+        let ntot = 0, cr = 0, cg = 0, cb = 0;
+        for (let s = 0; s < 4; s++) {
+          if (!en[s]) continue;
+          const n = N[s][i];
+          if (n > 0) { ntot += n; const c = spc[s].color; cr += c[0] * n; cg += c[1] * n; cb += c[2] * n; }
+        }
+        if (ntot > 0.5) {
+          const a = Math.min(1, Math.log10(1 + ntot) / 8.2);
+          cr /= ntot; cg /= ntot; cb /= ntot;
+          const k = a * 0.93;
+          r = r * (1 - k) + cr * k; g = g * (1 - k) + cg * k; b = b * (1 - k) + cb * k;
+          if (ntot > Nmax * 0.35) { r = Math.min(255, r * 1.14); g = Math.min(255, g * 1.14); b = Math.min(255, b * 1.14); }
+        }
+        // антибиотик: фиолетовый оверлей (насыщение по концентрации)
+        const aA = A[i] / (A[i] + 6);
+        if (aA > 0.004) {
+          const k = aA * 0.55;
+          r = r * (1 - k) + 142 * k; g = g * (1 - k) + 104 * k; b = b * (1 - k) + 255 * k;
+        }
+        d[p] = r; d[p + 1] = g; d[p + 2] = b; d[p + 3] = 255;
+      }
+    }
+    octx.putImageData(img, 0, 0);
+    dctx.imageSmoothingEnabled = false;
+    dctx.clearRect(0, 0, dish.width, dish.height);
+    dctx.drawImage(off, 0, 0, dish.width, dish.height);
+    // ободок чашки
+    const cx = dish.width / 2, cy = dish.height / 2, R = st.R * (dish.width / W);
+    dctx.lineWidth = 3; dctx.strokeStyle = '#2b3b55';
+    dctx.beginPath(); dctx.arc(cx, cy, R + 2, 0, 6.2832); dctx.stroke();
+    dctx.lineWidth = 1; dctx.strokeStyle = 'rgba(140,170,220,.25)';
+    dctx.beginPath(); dctx.arc(cx, cy, R + 5, 0, 6.2832); dctx.stroke();
+  }
+
+  // ---------- главный цикл ----------
+  let prevTs = 0;
+  function loop(ts) {
+    const dtReal = Math.min(0.05, (ts - prevTs) / 1000 || 0.0167);
+    prevTs = ts;
+    if (playing && st) {
+      let steps = Math.min(120, Math.round(speed * dtReal / DT));
+      for (let k = 0; k < steps; k++) { E.step(st, DT); pushHistory(false); }
+      render();
+      updateClock();
+      if ((frameNo++ & 7) === 0) { updateLegend(); drawCharts(); }
+    }
+    requestAnimationFrame(loop);
+  }
+
+  function updateClock() { $('clock').textContent = 't = ' + st.t.toFixed(1) + ' ч'; }
+
+  function updateLegend() {
+    const s = E.stats(st);
+    let html = '';
+    for (let i = 0; i < 4; i++) {
+      if (!st.enabled[i]) continue;
+      html += '<span class="lg"><span class="sw" style="background:' + st.species[i].css + '"></span>' +
+        st.species[i].name + ': <b>' + fmtExp(s.totals[i]) + '</b></span>';
+    }
+    if (st.enabled[0] && st.enabled[3]) {
+      html += '<span class="lg">доля R: <b>' + (s.resFrac * 100).toFixed(1) + '%</b></span>';
+    }
+    html += '<span class="lg muted2">S: ' + (s.S / st.env.S0 * 100).toFixed(0) + '% · A: ' +
+      (s.A >= 10 ? s.A.toFixed(0) : s.A.toFixed(1)) + ' мг/л</span>';
+    $('legend').innerHTML = html;
+  }
+
+  // ---------- графики ----------
+  const ch1 = $('chart1'), c1 = ch1.getContext('2d');
+  const ch2 = $('chart2'), c2 = ch2.getContext('2d');
+
+  function drawCharts() {
+    if (!history.length) { c1.clearRect(0, 0, ch1.width, ch1.height); c2.clearRect(0, 0, ch2.width, ch2.height); return; }
+    const tEnd = Math.max(24, st.t);
+    drawChart1(tEnd);
+    drawChart2(tEnd);
+  }
+
+  function drawChart1(tEnd) {
+    const w = ch1.width, h = ch1.height;
+    c1.fillStyle = '#0b1018'; c1.fillRect(0, 0, w, h);
+    const yLo = 3, yHi = 13;
+    // сетка десятичных
+    c1.strokeStyle = 'rgba(120,150,190,.13)'; c1.fillStyle = '#5f7492'; c1.font = '10px sans-serif';
+    for (let e = yLo; e <= yHi; e++) {
+      const yy = h - (e - yLo) / (yHi - yLo) * h;
+      c1.beginPath(); c1.moveTo(30, yy); c1.lineTo(w - 4, yy); c1.stroke();
+      c1.fillText('10' + sup(e), 4, yy + 3);
+    }
+    // время
+    for (let tt = 0; tt <= tEnd; tt += tEnd > 48 ? 12 : 6) {
+      const xx = 30 + tt / tEnd * (w - 34);
+      c1.fillText(tt + 'ч', Math.min(w - 24, xx), h - 2);
+    }
+    const anySpecies = [0, 1, 2, 3].filter(function (i) {
+      return history.some(function (p) { return p.tot[i] > 100; });
+    });
+    anySpecies.forEach(function (si) {
+      c1.strokeStyle = E.SPECIES[si].css; c1.lineWidth = 1.6; c1.beginPath();
+      let pen = false;
+      for (let k = 0; k < history.length; k++) {
+        const p = history[k], v = p.tot[si];
+        if (v <= 100) { pen = false; continue; }
+        const xx = 30 + p.t / tEnd * (w - 34);
+        const yy = h - (Math.min(yHi, Math.log10(v)) - yLo) / (yHi - yLo) * h;
+        if (!pen) { c1.moveTo(xx, yy); pen = true; } else c1.lineTo(xx, yy);
+      }
+      c1.stroke();
+    });
+  }
+
+  function drawChart2(tEnd) {
+    const w = ch2.width, h = ch2.height;
+    c2.fillStyle = '#0b1018'; c2.fillRect(0, 0, w, h);
+    const aMax = Math.max(64, history.reduce(function (m, p) { return Math.max(m, p.A); }, 0)) * 1.05;
+    // MIC / MPC пунктиром (шкала A)
+    c2.setLineDash([4, 3]); c2.font = '10px sans-serif';
+    [[E.SPECIES[0].MIC, 'MICwt'], [E.SPECIES[0].MIC * E.MPC_FACTOR, 'MPC']].forEach(function (mr) {
+      const yy = h - mr[0] / aMax * (h - 8);
+      if (yy < 4) return;
+      c2.strokeStyle = 'rgba(255,183,77,.55)';
+      c2.beginPath(); c2.moveTo(30, yy); c2.lineTo(w - 4, yy); c2.stroke();
+      c2.fillStyle = '#ffb74d'; c2.fillText(mr[1], 32, yy - 2);
+    });
+    c2.setLineDash([]);
+    // S: % от S0 (зелёная), A: мг/л (фиолетовая)
+    function line(get, color, norm) {
+      c2.strokeStyle = color; c2.lineWidth = 1.6; c2.beginPath();
+      for (let k = 0; k < history.length; k++) {
+        const p = history[k];
+        const v = get(p) / norm;
+        const xx = 30 + p.t / tEnd * (w - 34);
+        const yy = h - Math.min(1, v) * (h - 8);
+        if (k === 0) c2.moveTo(xx, yy); else c2.lineTo(xx, yy);
+      }
+      c2.stroke();
+    }
+    line(function (p) { return p.S; }, '#7ee38b', st.env.S0);
+    line(function (p) { return p.A; }, '#9c7cff', aMax);
+  }
+
+  // ---------- панель видов ----------
+  function buildSpeciesPanel() {
+    const box = $('speciesList');
+    let html = '';
+    E.SPECIES.forEach(function (sp, i) {
+      html += '<div class="sp-row" id="sprow-' + i + '">' +
+        '<div class="sp-head" data-i="' + i + '">' +
+        '<input type="checkbox" id="sp-en-' + i + '"' + (i < 1 ? ' checked' : '') + '>' +
+        '<span class="sw" style="width:11px;height:11px;border-radius:3px;background:' + sp.css + ';display:inline-block"></span>' +
+        '<span class="sp-name">' + sp.name + '</span>' +
+        '<span class="sp-count" id="sp-cnt-' + i + '">0</span></div>' +
+        '<div class="sp-params">' +
+        '<div class="kv"><label>\u03bcmax, ч\u207b\u00b9 (td ' + (Math.LN2 / sp.muMax * 60).toFixed(0) + ' мин)</label>' +
+        '<input type="number" id="sp-mu-' + i + '" value="' + sp.muMax + '" step="0.1" min="0.1"></div>' +
+        '<div class="kv"><label>MIC амоксиц., мг/л</label>' +
+        '<input type="number" id="sp-mic-' + i + '" value="' + sp.MIC + '" step="1" min="0.03"></div>' +
+        '<div class="sp-note">' + sp.latin + ' · ' + sp.host + '</div>' +
+        '</div></div>';
+    });
+    box.innerHTML = html;
+    E.SPECIES.forEach(function (_, i) {
+      $('sprow-' + i).querySelector('.sp-head').addEventListener('click', function (ev) {
+        if (ev.target.tagName === 'INPUT') return;
+        $('sprow-' + i).classList.toggle('open');
+      });
+      $('sp-en-' + i).addEventListener('change', resetSim);
+      $('sp-mu-' + i).addEventListener('change', resetSim);
+      $('sp-mic-' + i).addEventListener('change', resetSim);
+    });
+  }
+
+  function updateSpeciesCounts() {
+    const s = E.stats(st);
+    for (let i = 0; i < 4; i++) {
+      const el = $('sp-cnt-' + i);
+      if (el) el.textContent = fmtExp(s.totals[i]);
+    }
+  }
+
+  // ---------- инструменты и указатель ----------
+  function canvasPos(ev) {
+    const rect = dish.getBoundingClientRect();
+    return {
+      x: (ev.clientX - rect.left) / rect.width * W,
+      y: (ev.clientY - rect.top) / rect.height * H,
+    };
+  }
+  let dragging = false, lastApply = 0;
+  function applyTool(ev) {
+    const now = performance.now();
+    if (now - lastApply < 40) return;
+    lastApply = now;
+    const p = canvasPos(ev);
+    if (!E.inside(st, Math.round(p.x), Math.round(p.y))) return;
+    if (tool.kind === 'seed') E.inoculate(st, tool.sp, p.x, p.y, 1e6, 4);
+    else if (tool.kind === 'drop') E.dropAB(st, p.x, p.y, doseVal(), 5);
+    else if (tool.kind === 'wipe') {
+      const R = 5;
+      for (let yy = Math.floor(p.y - R); yy <= p.y + R; yy++)
+        for (let xx = Math.floor(p.x - R); xx <= p.x + R; xx++) {
+          if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
+          if ((xx - p.x) * (xx - p.x) + (yy - p.y) * (yy - p.y) > R * R) continue;
+          for (let s = 0; s < 4; s++) st.N[s][yy * W + xx] = 0;
+        }
+    }
+    render(); updateLegend();
+  }
+  dish.addEventListener('pointerdown', function (ev) { dragging = true; applyTool(ev); });
+  window.addEventListener('pointermove', function (ev) { if (dragging) applyTool(ev); });
+  window.addEventListener('pointerup', function () { dragging = false; });
+
+  function setTool(kind) {
+    tool.kind = kind;
+    $('toolSeed').classList.toggle('active', kind === 'seed');
+    $('toolDrop').classList.toggle('active', kind === 'drop');
+    $('toolWipe').classList.toggle('active', kind === 'wipe');
+    $('hint').textContent = kind === 'seed' ? 'Кликай по чаше — сеешь «' + E.SPECIES[tool.sp].name + '» (клик по кнопке меняет вид)'
+      : kind === 'drop' ? 'Кликай по чаше — капля антибиотика ' + (doseVal() >= 10 ? doseVal().toFixed(0) : doseVal().toFixed(1)) + ' мг/л'
+      : 'Кликай по чаше — стираешь колонии';
+  }
+
+  // ---------- тесты моделей ----------
+  function runTests(cb) {
+    const badge = $('modelBadge');
+    badge.textContent = 'модели: проверка\u2026'; badge.className = 'badge';
+    $('testsOut').innerHTML = '<div class="t-det">считаю\u2026</div>';
+    setTimeout(function () {
+      const res = T.runAll();
+      const ok = res.filter(function (r) { return r.pass; }).length;
+      badge.textContent = 'модели: ' + ok + '/' + res.length + (ok === res.length ? ' \u2713' : ' \u2717');
+      badge.className = 'badge ' + (ok === res.length ? 'ok' : 'bad');
+      $('testsOut').innerHTML = res.map(function (r) {
+        return '<div class="t-row"><div class="t-name ' + (r.pass ? 't-pass">PASS \u2713 ' : 't-fail">FAIL \u2717 ') +
+          r.name + '</div><div class="t-det">' + r.details + '</div></div>';
+      }).join('');
+      if (cb) cb(ok, res.length);
+    }, 60);
+  }
+
+  // ---------- инициализация ----------
+  function init() {
+    buildSpeciesPanel();
+    $('dose').value = 60; // 10^0.6 ≈ 4 мг/л = 1×MICwt
+    updateDoseUI();
+
+    document.querySelectorAll('.pbtn').forEach(function (b) {
+      b.addEventListener('click', function () { applyPreset(+b.dataset.p); });
+    });
+    $('btnPlay').addEventListener('click', function () {
+      playing = !playing;
+      $('btnPlay').textContent = playing ? '\u23f8 Пауза' : '\u25b6 Пуск';
+    });
+    $('btnStep').addEventListener('click', function () {
+      for (let k = 0; k < 50; k++) { E.step(st, DT); pushHistory(false); }
+      render(); updateClock(); updateLegend(); drawCharts();
+    });
+    $('btnReset').addEventListener('click', resetSim);
+    $('selSpeed').addEventListener('change', function () { speed = parseFloat(this.value); });
+    $('dose').addEventListener('input', updateDoseUI);
+    $('kel').addEventListener('change', resetSim);
+    $('S0').addEventListener('change', resetSim);
+    $('pMut').addEventListener('change', resetSim);
+    $('btnSeedRnd').addEventListener('click', function () {
+      $('seed').value = Math.floor(Math.random() * 99999) + 1; resetSim();
+    });
+    $('seed').addEventListener('change', resetSim);
+    $('toolSeed').addEventListener('click', function () {
+      if (tool.kind === 'seed') {
+        let n = tool.sp;
+        for (let k = 0; k < 5; k++) { n = (n + 1) % 4; if (E.SPECIES[n] && $('sp-en-' + n).checked) break; }
+        tool.sp = n;
+        $('toolSeedName').textContent = E.SPECIES[n].name;
+      } else { tool.sp = 0; $('toolSeedName').textContent = E.SPECIES[0].name; }
+      setTool('seed');
+    });
+    $('toolDrop').addEventListener('click', function () { setTool('drop'); });
+    $('toolWipe').addEventListener('click', function () { setTool('wipe'); });
+    $('btnLawn').addEventListener('click', function () { E.lawn(st, 0, 1e7); render(); updateLegend(); });
+    $('btnBolus').addEventListener('click', function () { E.bolusAB(st, doseVal()); render(); });
+    $('btnTests').addEventListener('click', function () { runTests(); });
+    $('micTick').textContent = 'MIC ' + E.SPECIES[0].MIC;
+    $('mpcTick').textContent = 'MPC ' + E.SPECIES[0].MIC * E.MPC_FACTOR;
+
+    applyPreset(0);
+    requestAnimationFrame(loop);
+    setTimeout(function () { runTests(); }, 400);
+    setInterval(function () { if (st) { updateSpeciesCounts(); } }, 700);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+
+</script>
+</body>
+</html>
