@@ -247,8 +247,47 @@
     };
   }
 
+  // Т9. Персистеры (Balaban 2004, Science 305:1622; a/b — сводка Kussell & Leibler 2005):
+  //      главный наблюдаемый фенотип — выживаемость после летального пульса АБ ∝ a
+  //      (дормант не убивается β-лактамом): пол спада hipQ/wt ~1000×, пул ∝ a (разница ~833×);
+  //      hipQ-резервуар восстанавливает популяцию после падения A<MIC; без слоя пул пуст.
+  function testPersisters() {
+    function run(mode) {
+      const env = { noise: 0, kel: 0.3, pMut: 0, persA: 0, persB: 0.1 };
+      if (mode === 'wt') { env.persA = 1.2e-6; env.persB = 0.1; }
+      if (mode === 'hip') { env.persA = 1e-3; env.persB = 1e-4; }
+      const st = mk({ seed: 11, enabled: [true, false, false, false], env: env });
+      E.lawn(st, 0, 1e7);
+      E.bolusAB(st, 256); // > MPC: летальная доза; при kel=0.3 АБ выше MIC ~14 ч — обычные клетки вымирают
+      const fl = E.chronFlags();
+      let minTot = Infinity, tot24 = 0, maxP = 0, k = 0, persEv = false;
+      while (st.t < 24) {
+        E.step(st, 0.05); k++;
+        const s = E.stats(st);
+        if (s.totals[0] < minTot) minTot = s.totals[0];
+        if (s.pers > maxP) maxP = s.pers;
+        if (k % 2 === 0 && E.chronicleStep(st, s, fl).some(function (e) { return e.cls === 'pers'; })) persEv = true;
+        if (st.t >= 23.95) tot24 = s.totals[0];
+      }
+      return { minTot: minTot, tot24: tot24, maxP: maxP, persEv: persEv };
+    }
+    const off = run('off'), wt = run('wt'), hip = run('hip');
+    const noPoolOff = off.maxP === 0;                                          // слой выкл — пула нет
+    const poolScales = hip.maxP > 500 && hip.maxP > 200 * wt.maxP;             // пул ∝ a (разница ~833×)
+    const survivorFrac = hip.minTot > 100 * Math.max(wt.minTot, off.minTot);   // выживаемость ∝ a — фенотип Балабана
+    const rescue = hip.tot24 > 1e4 && hip.persEv;                              // резервуар восстановил популяцию + хроника
+    return {
+      name: 'Персистеры (Balaban 2004): выживаемость после пульса ∝ a; hipQ-резервуар восстанавливает популяцию',
+      pass: noPoolOff && poolScales && survivorFrac && rescue,
+      details: 'пул P: off ' + off.maxP.toFixed(1) + ', wt ' + wt.maxP.toFixed(1) + ', hip ' + hip.maxP.toFixed(0) +
+        '; пол спада: off ' + off.minTot.toExponential(1) + ', wt ' + wt.minTot.toExponential(1) + ', hip ' + hip.minTot.toExponential(1) +
+        '; t=24 ч: off ' + off.tot24.toExponential(1) + ', wt ' + wt.tot24.toExponential(1) + ', hip ' + hip.tot24.toExponential(1) +
+        '; хроника перс.: ' + (hip.persEv ? 'да' : 'нет'),
+    };
+  }
+
   function runAll() {
-    const tests = [testGrowth, testTimeKill, testSeed, testSelectionWindow, testInfusion, testMegaPlate, testExportHash, testChronicle];
+    const tests = [testGrowth, testTimeKill, testSeed, testSelectionWindow, testInfusion, testMegaPlate, testExportHash, testChronicle, testPersisters];
     return tests.map(function (f) {
       try { return f(); }
       catch (e) { return { name: f.name, pass: false, details: 'ошибка: ' + e.message }; }

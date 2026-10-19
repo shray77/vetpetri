@@ -17,7 +17,7 @@
     <span class="logo">🧫</span>
     <div>
       <h1>ВетПетри <span class="sub">— научная песочница чашки Петри</span></h1>
-      <div class="tagline">Моно · Бараньи (лаг-фаза) · конкуренция · Хилл/Emax (time-kill) · окно селекции мутантов — реальные вет. патогены</div>
+      <div class="tagline">Моно · Бараньи (лаг-фаза) · конкуренция · Хилл/Emax (time-kill) · окно селекции мутантов · мега-чаша · персистеры — реальные вет. патогены</div>
     </div>
   </div>
   <div id="modelBadge" class="badge" title="Тесты моделей на известных кривых">модели: проверка…</div>
@@ -62,15 +62,30 @@
       <button id="btnBolus" class="btn sm">Болюс АБ всю чашу</button>
     </div>
 
+    <div class="tools" id="layerBar">
+      <span class="tb-label">Слой чаши:</span>
+      <div class="tool active" data-layer="biomass">Клетки</div>
+      <div class="tool" data-layer="S">Субстрат</div>
+      <div class="tool" data-layer="A">Антибиотик</div>
+      <div class="tool" data-layer="mu">Рост μ</div>
+    </div>
+
     <div class="charts">
       <div class="chart-cap"><b>КОЕ, log₁₀</b> <span id="legend"></span></div>
       <canvas id="chart1" width="960" height="170"></canvas>
       <div class="chart-cap"><b>Среда:</b> субстрат (зелёная, % от S₀) и антибиотик (фиолетовая, мг/л); пунктир — MICwt / MPC</div>
       <canvas id="chart2" width="960" height="130"></canvas>
+      <details class="box emaxbox">
+        <summary>PD-профиль: чистая скорость роста vs концентрация АБ (Хилл/Emax)</summary>
+        <canvas id="chart3" width="960" height="160"></canvas>
+        <div class="chart-cap">Сплошные кривые — сытая зона: net = рост − гибель − отмирание; ноль кривой = MIC по построению.
+          Пунктир — голодная зона (β-лактам бьёт делящиеся: голодные выживают ниже MIC — отсюда персистеры).
+          Вертикали — MICwt и MPC.</div>
+      </details>
     </div>
 
     <div class="chron">
-      <div class="chron-cap"><b>Хроника событий</b> <span class="muted">— что случилось и когда: лаг/экспонента, субстрат, АБ vs MIC, рождение мутантов, ручные действия</span></div>
+      <div class="chron-cap"><b>Хроника событий</b> <span class="muted">— что случилось и когда: лаг/экспонента, субстрат, АБ vs MIC, рождение мутантов, персистеры, ручные действия</span></div>
       <div id="chronList" class="chron-list"></div>
     </div>
   </section>
@@ -109,6 +124,12 @@
         <option value="1e-6" selected>10⁻⁶ (демо)</option>
         <option value="1e-5">10⁻⁵</option>
       </select></div>
+    <div class="kv"><label>Персистеры <span class="muted">(Balaban 2004)</span></label>
+      <select id="persMode" class="sel">
+        <option value="off" selected>выкл</option>
+        <option value="wt">дикий тип (a=1.2·10⁻⁶ ч⁻¹)</option>
+        <option value="hip">hipQ-мутант (a=10⁻³ ч⁻¹)</option>
+      </select></div>
 
     <h2>Виды <span class="muted">(галочка — вид сразу на чаше; если его не было, сеется капля)</span></h2>
     <div id="speciesList"></div>
@@ -118,7 +139,7 @@
     <div class="kv"><label>Seed (воспроизводимость)</label><span class="inline"><input id="seed" type="number" value="42" step="1"><button id="btnSeedRnd" class="btn sm">случайный</button></span></div>
 
     <details id="testsBox" class="box">
-      <summary>Тесты моделей (S-кривая · time-kill · seed · окно селекции · PK-инфузия · мега-чаша · экспорт · хроника)</summary>
+      <summary>Тесты моделей (S-кривая · time-kill · seed · окно селекции · PK-инфузия · мега-чаша · экспорт · хроника · персистеры)</summary>
       <button id="btnTests" class="btn">Прогнать заново</button>
       <div id="testsOut"></div>
     </details>
@@ -135,6 +156,11 @@
         <li><b>fT&gt;MIC и режим введения</b>: Berry A.V. et al. (2022) Pharmacodynamic Thresholds for Beta-Lactam Antibiotics. <i>Clin Pharmacokinet</i> — цели fT&gt;MIC 40–70%; Tilanus A. et al. (2023) <i>J Antimicrob Chemother</i> 78:2165 — болюс vs пролонгированная инфузия.</li>
         <li><b>PK амоксициллина у КРС</b>: Kreil V.E. et al. (2012) <i>Comp Immunol Microbiol Infect Dis</i> — t½ ≈ 0.86 ± 0.3 ч (натриевая соль, IM); здесь t½ = 1 ч.</li>
         <li><b>Цена резистентности</b>: β-лактамаза TEM-тип, MIC ≥ 64 мг/л; фитнес-цена −10% μmax (типичные оценки 1–15%).</li>
+        <li><b>Персистеры</b>: Balaban N.Q. et al. (2004) Bacterial persistence as a phenotypic switch. <i>Science</i> 305:1622 —
+          переключение нормальная↔дормантная клетки: WT a ≈ 1.2·10⁻⁶ ч⁻¹, b ≈ 0.1 ч⁻¹; hipQ a ≈ 10⁻³ ч⁻¹,
+          b ≈ 10⁻⁶–10⁻⁴ ч⁻¹ (в статье «poorly determined», взята верхняя граница). Значения сведены в:
+          Kussell E., Leibler S. (2005) <i>Genetics</i> 169:1807. В модели — детерминированный компартмент без ГСЧ;
+          β-лактам на дормант не действует, субстрат он не потребляет.</li>
         <li><b>Открытые системы для углубления</b>: COMETS (github.com/COMETS-bio/COMETS) — пространственные метаболические модели; gro (github.com/runhel/gro); CellModeller. ВетПетри — их сильно упрощённый кубический родственник для пары.</li>
       </ol>
     </details>

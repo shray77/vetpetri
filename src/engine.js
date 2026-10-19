@@ -105,6 +105,13 @@
     q0: 0.02,        // начальное физиологическое состояние (лаг-фаза, Бараньи)
     motility: 0.5,   // эффективная подвижность, ячейка²/ч — фронт колоний (Кольмогоров–Фишер)
     growthKillCoupling: true, // β-лактамы убивают делящиеся клетки
+    // Персистеры (v1.3, Balaban 2004, Science 305:1622; значения a/b сведены в
+    // Kussell & Leibler 2005, Genetics 169:1807): дормантный компартмент n↔p.
+    // WT: a = 1.2e-6 1/ч, b = 0.1 1/ч; hipQ: a = 1e-3 1/ч, b = 1e-6…1e-4 (взято 1e-4,
+    // в статье «poorly determined»). persA = 0 — слой ВЫКЛЮЧЕН (детерминированно,
+    // без rng; хэши старых сценариев не меняются).
+    persA: 0,
+    persB: 0.1,
   };
 
   const MPC_FACTOR = 8; // MPC ≈ 8×MIC (Drlica & Zhao 2003/2007; для β-лактамов — оценка)
@@ -122,6 +129,7 @@
       enabled: cfg.enabled.map(function (x) { return !!x; }),
       S: new Float32Array(n), A: new Float32Array(n),
       N: species.map(function () { return new Float32Array(n); }),
+      P: species.map(function () { return new Float32Array(n); }), // персистеры (v1.3, дормант)
       q: species.map(function () { return env.q0; }), // Бараньи q, глобально на вид
       t: 0,
       cx: (W - 1) / 2, cy: (H - 1) / 2,
@@ -135,6 +143,7 @@
       _nextDoseT: 8, // время следующего долива в режиме q8h (болюсы в 0, 8, 16 ч)
     };
     st._rng = mulberry32(st.seed);
+    st._pers = env.persA > 0; // слой персистеров включён (детерминированный, без rng)
     // статические полосы АБ («мега-чаша», Baym 2016): доли диаметра чашки [f0..f1]
     if (cfg.abZones && cfg.abZones.length) {
       const mic0 = Math.max(0.01, species[0].MIC);
@@ -357,7 +366,9 @@
           dN -= dRes;
         }
         N[i] += dN;
-        if (N[i] < 1e-2) N[i] = 0; // порог вымирания
+        // порог вымирания; при включённых персистерах ячейка жива, пока есть дормант
+        // (иначе порог съедает выходящих из дорманта — они возвращаются каплями < порога)
+        if (N[i] < 1e-2 && !(st._pers && st.P[s][i] > 0)) N[i] = 0;
         // лизис возвращает часть биомассы в субстрат (криптический рост):
         // иначе получается перелёт и обвал вместо плато + медленного отмирания
         if (deaths > 0) st.S[i] = Math.min(st.env.S0, st.S[i] + env.recycle * deaths / Y);
@@ -365,6 +376,29 @@
       }
     }
     st.q = newQ;
+
+    // 4b) персистеры (v1.3, Balaban 2004): дормантный пул — детерминированно, БЕЗ rng.
+    // β-лактам бьёт делящиеся: дормант не растёт, не двигается, не ест и не гибнет.
+    // n → p со скоростью a (спонтанный переход), p → n со скоростью b (выход из
+    // дорманта, 1/b — «лаг» персистеров). Включается только при env.persA > 0,
+    // поэтому поток rng() и хэши сценариев по умолчанию не тронуты.
+    if (env.persA > 0) {
+      for (let s = 0; s < st.species.length; s++) {
+        if (!st.enabled[s]) continue;
+        const Ns = st.N[s], Ps = st.P[s];
+        for (let i = 0; i < n; i++) {
+          const ni = Ns[i];
+          if (ni > 0) {
+            const sw = ni * env.persA * dt;      // n → p
+            Ns[i] = ni - sw; Ps[i] += sw;
+          }
+          if (Ps[i] > 0) {
+            const back = Ps[i] * env.persB * dt; // p → n
+            Ps[i] -= back; Ns[i] += back;
+          }
+        }
+      }
+    }
 
     // 5) дисперсия клеток (подвижность): фронт колоний расползается (Кольмогоров–Фишер)
     if (!st._wellMixed && env.motility > 0) {
@@ -383,12 +417,16 @@
 
   // ---------- Статистика ----------
   function stats(st) {
-    const out = { t: st.t, totals: new Array(st.species.length).fill(0), S: 0, A: 0, Amax: 0, area: 0 };
+    const out = { t: st.t, totals: new Array(st.species.length).fill(0), S: 0, A: 0, Amax: 0, area: 0, pers: 0 };
+    const hasP = !!st._pers;
     for (let i = 0; i < st.n; i++) {
       if (st.S[i] > 0) { out.area++; out.S += st.S[i]; }
       if (st.A[i] > out.Amax) out.Amax = st.A[i];
       out.A += st.A[i];
-      for (let s = 0; s < st.species.length; s++) out.totals[s] += st.N[s][i];
+      for (let s = 0; s < st.species.length; s++) {
+        out.totals[s] += hasP ? st.N[s][i] + st.P[s][i] : st.N[s][i];
+        if (hasP) out.pers += st.P[s][i];
+      }
     }
     out.S /= (out.area || 1); out.A /= (out.area || 1);
     const wt = out.totals[0] || 0, res = out.totals[3] || 0;
@@ -441,6 +479,7 @@
   function chronFlags() {
     return { n0: null, r0: 0, lag: false, s5: false, s05: false, abUp: false, abDown: false,
       mut0: false, mutHalf: false, kill1: false, kill3: false, regrow: false,
+      persSurv: false, persWake: false, persMax: 0,
       peak: 0, trough: Infinity, band: 0 };
   }
 
@@ -512,6 +551,19 @@
           fl.band = z;
           out.push({ t: t, txt: 'R-фронт вошёл в полосу ' + (z === 1 ? '1\u00d7MIC' : z === 2 ? '10\u00d7MIC' : '100\u00d7MIC'), cls: 'mut' });
         } else break;
+      }
+    }
+    // персистеры (v1.3, Balaban 2004): дормантный резервуар пережил АБ + выход из дорманта
+    if (st.env.persA > 0) {
+      const mic0 = st.species[0].MIC, pers = s.pers || 0;
+      if (pers > fl.persMax) fl.persMax = pers;
+      if (!fl.persSurv && s.A > mic0 && pers > 50 && total < fl.peak / 10) {
+        fl.persSurv = true;
+        out.push({ t: t, txt: 'персистеры пережили АБ — дормантный резервуар ≈ ' + pers.toExponential(1) + ' КОЕ', cls: 'pers' });
+      }
+      if (fl.persSurv && !fl.persWake && s.A < mic0) {
+        fl.persWake = true;
+        out.push({ t: t, txt: 'АБ упал — персистеры выходят из дорманта (1/b ≈ ' + (1 / st.env.persB).toFixed(0) + ' ч)', cls: 'pers' });
       }
     }
     // мутанты: родились сами (r0 < 1 — R не сеяли) и вытеснили wt

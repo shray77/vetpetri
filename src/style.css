@@ -171,3 +171,21 @@ body.projector details.lecture .la { font-size: 14.5px; }
 body.projector .pk-badge { font-size: 14px; }
 body.projector .chron-cap { font-size: 14.5px; }
 body.projector .chron-list { font-size: 14.5px; max-height: 210px; }
+
+/* v1.3: слои чаши, PD-профиль (Emax), челленджи, персистеры */
+#layerBar { margin-top: 6px; }
+#chart3 { display: block; width: 100%; height: auto; margin-bottom: 4px; }
+.emaxbox { margin: 4px 0 2px; }
+.emaxbox summary { font-size: 12.5px; }
+.emaxbox .chart-cap { margin-top: 6px; }
+.dot.pers { background: #ff8a65; }
+.chals { margin-top: 8px; border-top: 1px dashed var(--line); padding-top: 6px; }
+.chals > summary { cursor: pointer; color: var(--warn); font-size: 12.5px; }
+.chal { margin: 8px 0 0 10px; }
+.chal summary { cursor: pointer; font-size: 12.5px; color: var(--tx); }
+.chal summary:hover { color: var(--warn); }
+.chopts { margin: 5px 0 4px; padding-left: 18px; font-size: 12.5px; color: var(--mut); }
+.chans { font-size: 12.5px; color: var(--ok); margin-top: 4px; border-left: 2px solid #2b5c38; padding-left: 8px; }
+body.projector .chals > summary, body.projector .chal summary,
+body.projector .chopts, body.projector .chans { font-size: 14.5px; }
+body.projector #layerBar .tool { font-size: 15px; }
