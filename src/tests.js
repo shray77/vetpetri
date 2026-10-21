@@ -286,8 +286,98 @@
     };
   }
 
+  // Т10. v1.4 Фторхинолон — концентрационная зависимость: та же суточная доза,
+  //      болюс (высокий Cmax) даёт на порядки более глубокий провал time-kill, чем
+  //      инфузия (A_ss ниже MIC — противоположность β-лактамам, где лечит инфузия, Т5).
+  //      Плюс: β-лактамаза (ecor, MIC амоксициллина 64) от фторхинолона не защищает.
+  function testFQConcentrationDependence() {
+    const enroSpecies = E.SPECIES.map(function (s) { return Object.assign({}, s, { MIC: s.MIC2 }); });
+    function run(mode) {
+      const st = mk({
+        drug: 'enro',
+        species: enroSpecies,
+        enabled: [true, false, false, true],
+        dosing: { mode: mode, dose: 0.15 }, // 2.5×MIC энро для eco/ecor
+        env: { noise: 0, kel: Math.LN2 / 3, pMut: 0 }, // t½ 3 ч — типовой для энро у КРС
+      });
+      E.lawn(st, 0, 1e6);
+      E.lawn(st, 3, 1e4);
+      E.initDose(st);
+      let minEco = Infinity, minEcor = Infinity;
+      while (st.t < 24) {
+        E.step(st, 0.05);
+        const s = E.stats(st);
+        if (s.totals[0] < minEco) minEco = s.totals[0];
+        if (s.totals[3] < minEcor) minEcor = s.totals[3];
+      }
+      return { minEco: minEco, minEcor: minEcor, finEco: E.stats(st).totals[0] };
+    }
+    const bolus = run('bolus'), inf = run('infusion');
+    const concDep = bolus.minEco < inf.minEco / 100;   // болюс бьёт на порядки глубже (Cmax решает)
+    const lactamaseNoShield = bolus.minEcor < 1;       // при A > MIC энро β-лактамаза не спасает
+    const infSurvives = inf.minEco >= 1e5;             // инфузия той же дозы — A_ss < MIC: почти не задела
+    return {
+      name: 'Фторхинолон (энрофлоксацин): пик важнее времени — болюс бьёт глубже инфузии той же дозы',
+      pass: concDep && lactamaseNoShield && infSurvives,
+      details: 'доза 0.15 мг/л (2.5×MIC), t½ 3 ч: провал eco — болюс ' + bolus.minEco.toExponential(1) +
+        ' против инфузии ' + inf.minEco.toExponential(1) + ' (×' + (inf.minEco / Math.max(1, bolus.minEco)).toFixed(0) +
+        '); ecor под болюсом: ' + bolus.minEcor.toExponential(1) + ' (β-лактамаза от ФХ не защищает)',
+    };
+  }
+
+  // Т11. v1.4 PAE (пост-антибиотический эффект): после падения A ниже MIC популяция
+  //      с памятью экспозиции отстаёт в регроу от той, что без PAE (бактериостаз ~τ).
+  function testPAE() {
+    const enroSpecies = E.SPECIES.map(function (s) { return Object.assign({}, s, { MIC: s.MIC2 }); });
+    function run(pae) {
+      const st = mk({
+        drug: 'enro',
+        species: enroSpecies,
+        dosing: { mode: 'bolus', dose: 0.09 }, // 1.5×MIC: net ≈ 0 на пике, потом регроу
+        env: { noise: 0, kel: Math.LN2 / 3, pae: pae, pMut: 0 },
+      });
+      E.lawn(st, 0, 1e6);
+      E.initDose(st);
+      while (st.t < 12) E.step(st, 0.05);
+      return E.stats(st).totals[0];
+    }
+    const noPae = run(0), withPae = run(2.0);
+    const delayOk = noPae > withPae * 2.5; // регроу без PAE обогнал
+    return {
+      name: 'PAE (фторхинолон): после A < MIC регроу задержан на ~τ часов',
+      pass: delayOk,
+      details: 'болюс 0.09 мг/л (1.5×MIC), t½ 3 ч, t=12 ч: без PAE ' + noPae.toExponential(1) +
+        ' КОЕ, с PAE τ=2 ч ' + withPae.toExponential(1) + ' КОЕ (отставание ×' +
+        (noPae / Math.max(1, withPae)).toFixed(1) + ')',
+    };
+  }
+
+  // Т12. v1.4 PD-индексы: трапеции AUC24, доля T>MIC с линейными пересечениями порога.
+  function testPDIndices() {
+    const hist = [
+      { t: 0, A: 0 }, { t: 6, A: 6 }, { t: 12, A: 0 }, { t: 24, A: 0 },
+    ];
+    const pi = E.pdIndices(hist, 3); // MIC = 3 мг/л
+    const ok = pi && Math.abs(pi.fTMIC - 0.25) < 1e-9 &&      // выше MIC t=3…9 (6 ч из 24)
+      Math.abs(pi.auc24 - 36) < 1e-9 &&                        // два треугольника-трапеции по 18
+      Math.abs(pi.aucMic - 12) < 1e-9 &&
+      Math.abs(pi.cmax - 6) < 1e-9 && Math.abs(pi.cmaxMic - 2) < 1e-9;
+    // и обратный случай: быстрый выход на плато A=6 — почти 100% T>MIC
+    const hist2 = [{ t: 0, A: 0 }, { t: 1, A: 6 }, { t: 24, A: 6 }];
+    const pi2 = E.pdIndices(hist2, 3);
+    const ok2 = pi2 && Math.abs(pi2.fTMIC - 23.5 / 24) < 1e-9 && Math.abs(pi2.auc24 - 141) < 1e-9;
+    return {
+      name: 'PD-индексы (AUC24/MIC, T>MIC, Cmax/MIC): трапеции и пересечения порога',
+      pass: ok && ok2,
+      details: 'пик 6 мг/л: fT>MIC ' + (pi && pi.fTMIC.toFixed(3)) + ' (ожидание 0.250), AUC24 ' +
+        (pi && pi.auc24.toFixed(1)) + ' (36), AUC/MIC ' + (pi && pi.aucMic.toFixed(1)) + ' (12); ' +
+        'плато: fT>MIC ' + (pi2 && pi2.fTMIC.toFixed(3)) + ' (0.979), AUC24 ' + (pi2 && pi2.auc24.toFixed(1)) + ' (141)',
+    };
+  }
+
   function runAll() {
-    const tests = [testGrowth, testTimeKill, testSeed, testSelectionWindow, testInfusion, testMegaPlate, testExportHash, testChronicle, testPersisters];
+    const tests = [testGrowth, testTimeKill, testSeed, testSelectionWindow, testInfusion, testMegaPlate, testExportHash, testChronicle, testPersisters,
+      testFQConcentrationDependence, testPAE, testPDIndices];
     return tests.map(function (f) {
       try { return f(); }
       catch (e) { return { name: f.name, pass: false, details: 'ошибка: ' + e.message }; }

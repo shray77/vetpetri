@@ -67,10 +67,33 @@
     const s = E.createState({
       W: W, H: H, seed: (parseInt($('seed').value, 10) || 42) >>> 0,
       species: species, enabled: enabled, env: readUIEnv(),
+      drug: $('drugMode') ? $('drugMode').value : 'amox', // v1.4: класс АБ (kmax/H/PAE/coupling)
       dosing: { mode: $('doseMode').value, dose: doseVal() },
       abZones: curPreset === 5 ? MEGA_ZONES : null,
     });
     return s;
+  }
+
+  // ---------- v1.4: переключение класса антибиотика (UI-обвязка) ----------
+  // Меняет: селектор, MIC-инпуты видов (MIC ↔ MIC2), t½, диапазон слайдера дозы,
+  // подписи MIC/MPC и заголовок секции. MIC активного препарата — свойство вида
+  // в текущем прогоне: движок агностичен, переключение значений — здесь.
+  function setDrugUI(id, doReset) {
+    const d = E.DRUGS[id] || E.DRUGS.amox;
+    const enro = d.id === 'enro';
+    if ($('drugMode')) $('drugMode').value = d.id;
+    for (let i = 0; i < E.SPECIES.length; i++) {
+      const inp = $('sp-mic-' + i);
+      if (inp) inp.value = enro ? E.SPECIES[i].MIC2 : E.SPECIES[i].MIC;
+    }
+    if ($('kel')) $('kel').value = d.kelHalf;
+    if ($('dose')) $('dose').min = enro ? -160 : -10; // энро: до 0.025 мг/л (MIC 0.06 — нужны доли)
+    const mic0 = enro ? E.SPECIES[0].MIC2 : E.SPECIES[0].MIC;
+    if ($('micTick')) $('micTick').textContent = 'MIC ' + (mic0 < 1 ? mic0.toFixed(2) : mic0);
+    if ($('mpcTick')) $('mpcTick').textContent = 'MPC ' + (mic0 * E.MPC_FACTOR < 1 ? (mic0 * E.MPC_FACTOR).toFixed(2) : (mic0 * E.MPC_FACTOR).toFixed(1));
+    if ($('abTitle')) $('abTitle').textContent = 'Антибиотик — ' + (enro ? 'энрофлоксацин' : 'амоксициллин');
+    if ($('abCls')) $('abCls').textContent = d.cls;
+    if (doReset) resetSim();
   }
 
   // ---------- лекционные сценарии (Avida-ED style: предскажи → запусти → сравни) ----------
@@ -85,9 +108,9 @@
       'Попробуй то же с другой S₀ (меньше еды — острее конкуренция).'],
       q: 'Кто выигрывает: тот, кто быстрее растёт, или тот, кто раньше истощает общий субстрат?',
       a: 'Это эксплуатационная конкуренция — родственник Лотки–Вольтерры с общим ресурсом.' },
-    { steps: ['Суточная доза 32 мг/л, режим «1 болюс» → Пуск. Смотри фиолетовую кривую и бейдж T>MIC.',
+    { steps: ['Суточная доза 99 мг/л (слайдер), режим «1 болюс» → Пуск. Смотри фиолетовую кривую и бейдж T>MIC.',
       'Сброс, та же доза в режиме «инфузия 24 ч» → сравни T>MIC и форму кривой КОЕ.',
-      'Повтори с «3 введения (q8h)» — три промежуточных пика.'],
+      'Повтори с «3 введения (q8h)» — три промежуточных пика. (При малых дозах вроде 32 инфузия не добирается до MIC — A_ss = доза/(24·t½): вот почему доза и режим не независимы.)'],
       q: 'У какой кривой пик выше? А у какой время выше MIC больше? Какая стратегия «лечит» для β-лактама?',
       a: 'β-лактамы time-dependent: цель fT>MIC 40–70% (Berry 2022). Лечит не «сколько дали», а «сколько держали».' },
     { steps: ['Запусти дозу 0.5 мг/л (ниже MIC) — растут оба.',
@@ -105,6 +128,11 @@
       'Сравни с видео HHMI «Giant Petri Dish» (Kishony lab, Baym 2016).'],
       q: 'Почему мутант не берёт полосу 100× сразу, а «фиксируется» на каждой ступени?',
       a: 'Ступенчатая эволюция: каждая полоса — трамплин. Недодозированная среда строит лестницу резистентности.' },
+    { steps: ['Пресет 7 (энрофлоксацин, болюс 0.15 мг/л = 2.5×MIC) → Пуск: газон падает на порядки, β-лактамазный клон — вместе с ним.',
+      'Сбрось и переключи режим на «инфузия 24 ч» (та же доза) — почти ничего не происходит: A ниже MIC всю сутки.',
+      'Поднимай дозу и следи за бейджем AUC24/MIC: цель ≥ 125, а при 0.15 мг/л — ≈ 9.'],
+      q: 'Одна и та же доза болюсом и инфузией: для амоксициллина лечит инфузия (Т5), а здесь?',
+      a: 'Фторхинолоны концентрационно-зависимы: решает ПИК (Cmax/MIC) и суммарная экспозиция (AUC/MIC ≥ 125), а не время выше MIC. Доза та же → AUC тот же, режим меняет только пик.' },
   ];
 
   function lectureHTML(idx) {
@@ -154,6 +182,12 @@
       { q: 'Мутант дошёл до полосы 100×MIC и встал. Что говорит Baym 2016 о том, что дальше?',
         opts: ['нужна следующая мутация — каждая полоса трамплин', 'мутант вернётся в нулевую зону', 'эволюция закончилась навсегда'], ok: 0,
         why: 'Ступенчатая эволюция: в реальном эксперименте Kishony lab популяция шла через 1→10→100× серией последовательных мутаций.' } ],
+    [ { q: 'Энрофлоксацин болюсом 2.5×MIC валит газон E. coli. А что будет с клоном β-лактамазы (MIC амоксициллина 64)?',
+        opts: ['выживет — у него же резистентность', 'погибнет вместе с wt — β-лактамаза не действует на фторхинолоны', 'погибнет первым — он всегда слабее'], ok: 1,
+        why: 'TEM-разрушает β-лактамное кольцо, а фторхинолон бьёт ДНК-гиразу — другой класс, другая мишень. Кросс-защиты нет: смена класса — способ обойти фермент.' },
+      { q: 'Та же суточная доза энро: болюс или инфузия убьёт больше?',
+        opts: ['инфузия — дольше держит A выше MIC', 'болюс — выше пик, а фторхинолон концентрационно-зависим', 'одинаково — доза та же'], ok: 1,
+        why: 'AUC у режимов почти равна (доза одна), но убивает ПИК: Cmax/MIC ≥ 8–10. Для β-лактамов наоборот — лечит время (T>MIC 40–70%).' } ],
   ];
 
   function challengeHTML(idx) {
@@ -173,6 +207,7 @@
       name: 'Кривая роста',
       note: '<b>Кинетика Моно на одном виде.</b> Капля E. coli в чистой чаше: лаг-фаза (~2 ч, адаптация по Бараньи) → экспонента (удвоение ~20 мин) → плато (субстрат исчерпан, выход ≈ Y·S\u2080) → медленное отмирание. На нижнем графике зелёная кривая — субстрат тает по мере роста.',
       ui: function () {
+        setDrugUI('amox', false);
         $('sp-en-0').checked = true; $('sp-en-1').checked = false; $('sp-en-2').checked = false; $('sp-en-3').checked = false;
         $('kel').value = 1.0; $('pMut').value = '0'; $('doseMode').value = 'bolus'; $('persMode').value = 'off';
       },
@@ -184,6 +219,7 @@
       name: 'Конкуренция видов',
       note: '<b>Два вида против общего субстрата</b> (эксплуатационная конкуренция, родственник Лотки–Вольтерры с общим ресурсом). E. coli (быстрорастущий) против Salmonella Dublin. Следи за границей колоний: кто первым захватывает субстрат, тот и давит соседа.',
       ui: function () {
+        setDrugUI('amox', false);
         $('sp-en-0').checked = true; $('sp-en-1').checked = true; $('sp-en-2').checked = false; $('sp-en-3').checked = false;
         $('kel').value = 1.0; $('pMut').value = '0'; $('doseMode').value = 'bolus'; $('persMode').value = 'off';
       },
@@ -196,6 +232,7 @@
       name: 'Time-kill: режим введения',
       note: '<b>Фармакодинамика амоксициллина (Хилл/Emax) + dose fractionation.</b> Газон E. coli + суточная доза из слайдера, внесённая по выбранному режиму: «1 болюс» / «3 введения (q8h)» / «инфузия 24 ч». Кривая КОЕ: лог-линейный спад (kmax ≈ 3 ч⁻¹), потом регроу, когда концентрация (фиолетовая) падает ниже MIC. Бейдж T>MIC — доля первых суток выше MIC: для β-лактамов цель 40–70% (Berry 2022). <b>Персистеры включены (дикий тип, Balaban 2004)</b>: тонкий дормантный хвост переживает болюс; переключи на «hipQ-мутант» в разделе антибиотика — резервуар вырастет на три порядка.',
       ui: function () {
+        setDrugUI('amox', false);
         $('sp-en-0').checked = true; $('sp-en-1').checked = false; $('sp-en-2').checked = false; $('sp-en-3').checked = false;
         $('kel').value = 1.0; $('pMut').value = '0'; $('persMode').value = 'wt';
       },
@@ -208,6 +245,7 @@
       name: 'Окно селекции мутантов',
       note: '<b>Почему «средняя доза» растит резистентность (Drlica).</b> Газон E. coli + 1% мутанта (MIC 64, цена: рост −10%). Концентрация поддерживается (t½ → ∞, «инфузия»). Доза в окне селекции (MICwt = 4 … MPC = 32): wt подавлен, мутант растёт → доля R → 100%. Доза выше MPC мутанта (256): подавлены оба. Доза ниже MIC: растут оба. Верни t½ = 1 ч — увидишь, как болюс проходит через окно и wt отрастает.',
       ui: function () {
+        setDrugUI('amox', false);
         $('sp-en-0').checked = true; $('sp-en-1').checked = false; $('sp-en-2').checked = false; $('sp-en-3').checked = true;
         $('kel').value = 0; $('pMut').value = '0'; $('doseMode').value = 'bolus'; $('persMode').value = 'off';
       },
@@ -221,6 +259,7 @@
       name: 'Песочница',
       note: '<b>Свободная игра.</b> Клик по инструменту «Посев» циклически меняет вид; капля антибиотика берёт дозу из слайдера — вокруг капли возникает градиент концентраций, и на границе «рост/гибель» можно ловить окно селекции вручную. Включи мутации 10\u207b\u2076 и понаблюдай. Курсор на чаше — подсказка «что под ним».',
       ui: function () {
+        setDrugUI('amox', false);
         $('sp-en-0').checked = true; $('sp-en-1').checked = true; $('sp-en-2').checked = true; $('sp-en-3').checked = false;
         $('kel').value = 1.0; $('pMut').value = '1e-6'; $('doseMode').value = 'bolus'; $('persMode').value = 'off';
       },
@@ -230,6 +269,7 @@
       name: 'Мега-чаша: лестница доз',
       note: '<b>Эксперимент Kishony lab (Baym 2016, Science).</b> Чаша разделена на полосы антибиотика 0 → 1× → 10× → 100× MICwt. Газон E. coli по всей чаше + редкий R-клон (β-лактамаза, MIC 64) в нулевой зоне слева. wt упирается в полосу 1×MIC (net-рост = 0), мутант прорывает её, медленно идёт через 10× и стопорится на 100×. Каждая полоса — трамплин ступенчатой эволюции. Слайдер дозы здесь не действует — концентрации задают полосы.',
       ui: function () {
+        setDrugUI('amox', false);
         $('sp-en-0').checked = true; $('sp-en-1').checked = false; $('sp-en-2').checked = false; $('sp-en-3').checked = true;
         $('kel').value = 1.0; $('pMut').value = '1e-6'; $('doseMode').value = 'bolus'; $('persMode').value = 'off';
       },
@@ -239,36 +279,66 @@
         $('selSpeed').value = '20'; speed = 20;
       },
     },
+    {
+      name: 'Класс АБ: β-лактам vs фторхинолон',
+      note: '<b>Два класса — две философии дозирования (v1.4).</b> Газон E. coli + 1% «устойчивого» клона (β-лактамаза TEM, MIC амоксициллина 64) — и энрофлоксацин: фторхинолон концентрационно-зависимый (крутая Хилл-кривая kmax 8, H 1.6), бьёт и неделящихся, с пост-антибиотическим эффектом ~2 ч. Суточная доза 0.15 мг/л = 2.5×MIC. Сравни с пресетом 3: для β-лактама лечит инфузия (T>MIC), для фторхинолона — ПИК: болюс той же дозы валит популяцию на порядки глубже, а инфузия держит A ниже MIC — почти не работает. Бейдж AUC24/MIC: при 0.15 мг/л — ≈ 9 (до цели ≥ 125 далеко — подними дозу до ~2 мг/л и добери). Доза та же → AUC тот же, режим меняет только пик. И главное: β-лактамазный клон гибнет вместе с wt — фермент против фторхинолона бесполезен (другая мишень, ДНК-гираза).',
+      ui: function () {
+        setDrugUI('enro', false);
+        $('sp-en-0').checked = true; $('sp-en-1').checked = false; $('sp-en-2').checked = false; $('sp-en-3').checked = true;
+        $('kel').value = 3.0; $('pMut').value = '0'; $('doseMode').value = 'bolus'; $('persMode').value = 'off';
+        setDoseSlider(0.15);
+      },
+      setup: function (s) {
+        E.lawn(s, 0, 1e7);
+        E.lawn(s, 3, 1e5);
+        E.initDose(s);
+      },
+    },
   ];
 
   // ---------- доза ----------
   function doseVal() { return Math.pow(10, parseInt($('dose').value, 10) / 100); }
   function setDoseSlider(v) { $('dose').value = Math.round(100 * Math.log10(Math.max(0.1, Math.min(256, v)))); updateDoseUI(); }
   function updateDoseUI() {
-    const d = doseVal(), x = d / E.SPECIES[0].MIC;
-    $('doseVal').textContent = (d >= 10 ? d.toFixed(0) : d.toFixed(1)) + ' мг/л';
-    $('doseX').textContent = '= ' + (x >= 10 ? x.toFixed(0) : x.toFixed(1)) + '\u00d7MICwt';
+    const d = doseVal();
+    const mic = st && st.species[0] ? st.species[0].MIC : E.SPECIES[0].MIC; // MIC активного АБ
+    const x = d / mic;
+    $('doseVal').textContent = (d >= 10 ? d.toFixed(0) : d >= 1 ? d.toFixed(1) : d.toFixed(2)) + ' мг/л';
+    $('doseX').textContent = '= ' + (x >= 10 ? x.toFixed(0) : x >= 1 ? x.toFixed(1) : x.toFixed(2)) + '\u00d7MICwt';
   }
 
-  // ---------- PK: бейдж T>MIC (доля первых суток выше MICwt, Berry 2022: цель 40–70%) ----------
+  // ---------- PK: бейдж PD-индекса (v1.4 — по классу АБ) ----------
+  // амоксициллин: T>MIC — доля первых суток выше MICwt, цель 40–70% (Berry 2022);
+  // энрофлоксацин: AUC24/MIC (цель ≥ 100–125, McKellar & Preston 2004) + Cmax/MIC (≥ 8–10).
   function updatePKBadge() {
     const el = $('pkBadge');
     if (!el) return;
-    if (curPreset !== 2 || !st || !history.length) { el.style.display = 'none'; return; }
+    if ((curPreset !== 2 && curPreset !== 6) || !st || !history.length) { el.style.display = 'none'; return; }
     const mic = st.species[0].MIC;
-    let above = 0, n = 0;
-    for (let k = 0; k < history.length; k++) {
-      if (history[k].t > 24.001) continue; // первые сутки
-      n++;
-      if (history[k].A > mic) above++;
+    const modeName = $('doseMode').value;
+    const modeLabel = modeName === 'bolus' ? '1 болюс' : modeName === 'q8h' ? '3 введения' : 'инфузия';
+    if (st.drugId === 'enro') {
+      const pi = E.pdIndices(history, mic);
+      if (!pi) { el.style.display = 'none'; return; }
+      el.style.display = '';
+      const aucOk = pi.aucMic >= 100; // фторхинолоны: ≥ 100–125 для грамотрицательных
+      el.textContent = 'AUC24/MIC: ' + pi.aucMic.toFixed(0) + ' [цель ≥ 125] · Cmax/MIC: ' +
+        pi.cmaxMic.toFixed(1) + ' [≥ 8–10] [' + modeLabel + '] — доза та же → AUC тот же, режим меняет только пик';
+      el.className = 'pk-badge ' + (aucOk ? 'ok' : 'bad');
+    } else {
+      let above = 0, n = 0;
+      for (let k = 0; k < history.length; k++) {
+        if (history[k].t > 24.001) continue; // первые сутки
+        n++;
+        if (history[k].A > mic) above++;
+      }
+      if (!n) { el.style.display = 'none'; return; }
+      const f = above / n;
+      el.style.display = '';
+      el.textContent = 'T>MIC (0–24 ч): ' + (f * 100).toFixed(0) + '% [' + modeLabel +
+        '] · цель для β-лактамов 40–70%';
+      el.className = 'pk-badge ' + (f >= 0.4 ? 'ok' : 'bad');
     }
-    if (!n) { el.style.display = 'none'; return; }
-    const f = above / n, modeName = $('doseMode').value;
-    el.style.display = '';
-    el.textContent = 'T>MIC (0–24 ч): ' + (f * 100).toFixed(0) + '% [' +
-      (modeName === 'bolus' ? '1 болюс' : modeName === 'q8h' ? '3 введения' : 'инфузия') +
-      '] · цель для β-лактамов 40–70%';
-    el.className = 'pk-badge ' + (f >= 0.4 ? 'ok' : 'bad');
   }
 
   // ---------- сброс/пуск ----------
@@ -514,9 +584,9 @@
     const w = ch2.width, h = ch2.height;
     c2.fillStyle = '#0b1018'; c2.fillRect(0, 0, w, h);
     const aMax = Math.max(64, history.reduce(function (m, p) { return Math.max(m, p.A); }, 0)) * 1.05;
-    // MIC / MPC пунктиром (шкала A)
+    // MIC / MPC пунктиром (шкала A) — активного препарата
     c2.setLineDash([4, 3]); c2.font = '10px sans-serif';
-    [[E.SPECIES[0].MIC, 'MICwt'], [E.SPECIES[0].MIC * E.MPC_FACTOR, 'MPC']].forEach(function (mr) {
+    [[st.species[0].MIC, 'MICwt'], [st.species[0].MIC * E.MPC_FACTOR, 'MPC']].forEach(function (mr) {
       const yy = h - mr[0] / aMax * (h - 8);
       if (yy < 4) return;
       c2.strokeStyle = 'rgba(255,183,77,.55)';
@@ -551,7 +621,7 @@
     if (!c3 || !st) return;
     const w = ch3.width, h = ch3.height;
     c3.fillStyle = '#0b1018'; c3.fillRect(0, 0, w, h);
-    const xLo = -0.8, xHi = 2.7; // log10 A: 0.16 … 500 мг/л
+    const xLo = st.drugId === 'enro' ? -1.8 : -0.8, xHi = 2.7; // log10 A: энро — от 0.016, амокс. — от 0.16 мг/л
     const yLo = -3.4, yHi = 2.6; // 1/ч
     const X = function (lg) { return 34 + (lg - xLo) / (xHi - xLo) * (w - 42); };
     const Y = function (v) { return h - 4 - (v - yLo) / (yHi - yLo) * (h - 16); };
@@ -561,7 +631,7 @@
       c3.beginPath(); c3.moveTo(34, yy); c3.lineTo(w - 6, yy); c3.stroke();
       c3.fillText((v > 0 ? '+' : '') + v, 8, yy + 3);
     }
-    for (let lg = -0.5; lg <= 2.5; lg++) c3.fillText(Math.pow(10, lg).toFixed(lg < 0 ? 1 : 0), X(lg) - 6, h - 2);
+    for (let lg = st.drugId === 'enro' ? -1.5 : -0.5; lg <= 2.5; lg++) c3.fillText(Math.pow(10, lg).toFixed(lg < 0 ? 2 : lg < 1 ? 1 : 0), X(lg) - 6, h - 2);
     c3.fillText('мг/л', w - 28, h - 2);
     c3.fillText('ч⁻¹', 8, 10);
     // нулевая линия
@@ -581,13 +651,16 @@
       if (!st.enabled[s]) return;
       const g = Math.max(0.2, sp.muMax - sp.kd);
       const c50 = E.c50Of(sp, st.env);
+      const c50H = Math.pow(c50, sp.H); // v1.4-фикс: знаменатель Хилла A^H + C50^H (как в калибровке)
+      const coup = st.env.growthKillCoupling; // β-лактам бьёт делящихся; фторхинолон — всех
       function curve(sat, style, color, wd) {
         c3.strokeStyle = color; c3.lineWidth = wd; c3.setLineDash(style); c3.beginPath();
         for (let k = 0; k <= 160; k++) {
           const lg = xLo + (xHi - xLo) * k / 160;
           const Av = Math.pow(10, lg);
-          const kill = sp.kmax * Math.pow(Av, sp.H) / (Math.pow(Av, sp.H) + c50);
-          const net = sp.muMax * sat - kd0 - kill * (0.2 + 0.8 * sat);
+          const AH = Math.pow(Av, sp.H);
+          const kill = sp.kmax * AH / (AH + c50H);
+          const net = sp.muMax * sat - kd0 - kill * (coup ? (0.2 + 0.8 * sat) : 1);
           const xx = X(lg), yy = Y(Math.max(yLo, Math.min(yHi, net)));
           if (k === 0) c3.moveTo(xx, yy); else c3.lineTo(xx, yy);
         }
@@ -595,7 +668,7 @@
       }
       const kd0 = sp.kd;
       curve(1, [], sp.css, 1.8);                        // сытая зона (net=0 при A=MIC)
-      if (s === 0) curve(0.05, [3, 3], 'rgba(125,146,173,.8)', 1.2); // голодная зона (wt)
+      if (s === 0 && coup) curve(0.05, [3, 3], 'rgba(125,146,173,.8)', 1.2); // голодная зона (wt, только β-лактам)
       c3.fillStyle = sp.css;
       c3.fillText(sp.name, X(Math.log10(Math.max(1e-3, sp.MIC))) + 4, Y(0) - 5 - s * 11);
     });
@@ -615,9 +688,9 @@
         '<div class="sp-params">' +
         '<div class="kv"><label>\u03bcmax, ч\u207b\u00b9 (td ' + (Math.LN2 / sp.muMax * 60).toFixed(0) + ' мин)</label>' +
         '<input type="number" id="sp-mu-' + i + '" value="' + sp.muMax + '" step="0.1" min="0.1"></div>' +
-        '<div class="kv"><label>MIC амоксиц., мг/л</label>' +
-        '<input type="number" id="sp-mic-' + i + '" value="' + sp.MIC + '" step="1" min="0.03"></div>' +
-        '<div class="sp-note">' + sp.latin + ' · ' + sp.host + '</div>' +
+        '<div class="kv"><label>MIC активного АБ, мг/л <span class="muted">(амоксициллин / энрофлоксацин)</span></label>' +
+        '<input type="number" id="sp-mic-' + i + '" value="' + sp.MIC + '" step="' + (sp.MIC < 1 ? '0.01' : '1') + '" min="0.01"></div>' +
+        '<div class="sp-note">' + sp.latin + ' · ' + sp.host + (sp.MIC2 ? ' · энро MIC ' + sp.MIC2 : '') + '</div>' +
         '</div></div>';
     });
     box.innerHTML = html;
@@ -782,7 +855,7 @@
     const mic = [0, 1, 2, 3].map(function (i) { return $('sp-mic-' + i).value; }).join(',');
     return { p: String(curPreset), seed: $('seed').value, dose: $('dose').value,
       kel: $('kel').value, pMut: $('pMut').value, S0: $('S0').value, pers: $('persMode').value,
-      en: en, mu: mu, mic: mic, mode: $('doseMode').value };
+      en: en, mu: mu, mic: mic, mode: $('doseMode').value, drug: $('drugMode') ? $('drugMode').value : 'amox' };
   }
   let lastHashWritten = null;
   $('btnShare').addEventListener('click', function () {
@@ -809,6 +882,7 @@
       if (hp.pMut !== undefined) $('pMut').value = hp.pMut;
       if (hp.S0 !== undefined) $('S0').value = hp.S0;
       if (hp.mode !== undefined) $('doseMode').value = hp.mode;
+      if (hp.drug && E.DRUGS[hp.drug]) setDrugUI(hp.drug, false); // v1.4: класс АБ (до mic-оверрайда)
       if (hp.pers !== undefined && ['off', 'wt', 'hip'].indexOf(hp.pers) >= 0) $('persMode').value = hp.pers;
       if (hp.en) for (let i = 0; i < 4; i++) $('sp-en-' + i).checked = hp.en[i] === '1';
       if (hp.mu) hp.mu.split(',').forEach(function (v, i) { if ($('sp-mu-' + i)) $('sp-mu-' + i).value = v; });
@@ -867,11 +941,13 @@
       b.addEventListener('click', function () { setLayer(b.dataset.layer); render(); });
     });
     $('persMode').addEventListener('change', resetSim);
+    $('drugMode').addEventListener('change', function () { setDrugUI(this.value, true); }); // v1.4: смена класса АБ
     $('btnLawn').addEventListener('click', function () { E.lawn(st, 0, 1e7); render(); updateLegend(); logEvent('газон E. coli по всей чаше', 'man'); });
     $('btnBolus').addEventListener('click', function () { E.bolusAB(st, doseVal()); render(); logEvent('болюс АБ ' + (doseVal() >= 10 ? doseVal().toFixed(0) : doseVal().toFixed(1)) + ' мг/л всю чашу', 'man'); });
     $('btnTests').addEventListener('click', function () { runTests(); });
     $('micTick').textContent = 'MIC ' + E.SPECIES[0].MIC;
     $('mpcTick').textContent = 'MPC ' + E.SPECIES[0].MIC * E.MPC_FACTOR;
+    setDrugUI('amox', false);
 
     applyPreset(0);
     if (location.hash && location.hash.length > 1) applyFromHash(); // ссылка-сценарий из методички

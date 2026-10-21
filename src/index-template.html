@@ -79,7 +79,8 @@
         <summary>PD-профиль: чистая скорость роста vs концентрация АБ (Хилл/Emax)</summary>
         <canvas id="chart3" width="960" height="160"></canvas>
         <div class="chart-cap">Сплошные кривые — сытая зона: net = рост − гибель − отмирание; ноль кривой = MIC по построению.
-          Пунктир — голодная зона (β-лактам бьёт делящиеся: голодные выживают ниже MIC — отсюда персистеры).
+          Пунктир — голодная зона для β-лактама (бьёт делящиеся: голодные выживают ниже MIC — отсюда персистеры);
+          у фторхинолона пунктира нет — класс бьёт и неделящихся.
           Вертикали — MICwt и MPC.</div>
       </details>
     </div>
@@ -99,10 +100,16 @@
       <button class="pbtn" data-p="3">4 · Окно селекции мутантов</button>
       <button class="pbtn" data-p="4">5 · Песочница</button>
       <button class="pbtn" data-p="5">6 · Мега-чаша: лестница доз</button>
+      <button class="pbtn" data-p="6">7 · Класс АБ: β-лактам vs фторхинолон</button>
     </div>
     <div id="presetNote" class="preset-note"></div>
 
-    <h2>Антибиотик — амоксициллин</h2>
+    <h2><span id="abTitle">Антибиотик — амоксициллин</span> <span class="muted" id="abCls">β-лактам · time-dependent</span></h2>
+    <div class="kv"><label>Класс антибиотика <span class="muted">(v1.4)</span></label>
+      <select id="drugMode" class="sel">
+        <option value="amox" selected>амоксициллин — β-лактам (T>MIC)</option>
+        <option value="enro">энрофлоксацин — фторхинолон (AUC/MIC)</option>
+      </select></div>
     <div class="dose-row">
       <input id="dose" type="range" min="-10" max="241" value="18" step="1">
       <div class="dose-read"><b id="doseVal">4.0 мг/л</b> <span id="doseX">= 1.0×MICwt</span></div>

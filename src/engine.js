@@ -42,8 +42,13 @@
   // ---------- Виды (реальные вет. патогены, параметры — из литературы, см. README) ----------
   // muMax: 1/ч (37 °C, богатая среда); Ks: мг/л (Monod 1949 / Kovárová-Kovar & Egli 1998);
   // MIC: мг/л амоксициллина (CLSI/EUCAST; у Salmonella — прокси по ампициллину);
+  // MIC2: мг/л ЭНРОФЛОКСАЦИНА (v1.4 — второй класс АБ, фторхинолон; CLSI VET01/EUCAST:
+  // E. coli S ≤ 0.25–0.5, ECOFF ~0.125 — берём консервативно 0.06–0.125;
+  // P. multocida — очень чувствителен 0.03; β-лактамаза TEM на фторхинолоны НЕ действует —
+  // другая мишень (ДНК-гираза), поэтому у ecor MIC2 = дикому)
   // kd: скорость отмирания при истощении субстрата (порядок 0.05–0.15 1/ч);
-  // kmax/H: фармакодинамика time-kill (Regoes 2004, Nielsen & Friberg 2006).
+  // kmax/H: фармакодинамика time-kill (Regoes 2004, Nielsen & Friberg 2006) — для
+  // фторхинолонов переопределяются классом АБ (DRUGS.enro: kmax 8, H 1.6).
   const SPECIES_DEFAULTS = [
     {
       id: 'eco', name: 'E. coli', latin: 'Escherichia coli',
@@ -51,6 +56,7 @@
       muMax: 2.1,   // td ≈ 20 мин (богатая среда, 37 °C)
       Ks: 4,        // Monod 1949: Ks глюкозы 2–6 мг/л
       MIC: 4,       // WT типично 2–8 мг/л (ECOFF ≤8)
+      MIC2: 0.06,   // энрофлоксацин: чувствительный WT (S ≤ 0.25)
       kd: 0.08,
       kmax: 3.0, H: 1.2, // β-лактамы: time-dependent, kmax ~2–4 1/ч
       color: [77, 208, 225], css: '#4dd0e1',
@@ -62,6 +68,7 @@
       muMax: 1.4,   // td ≈ 30 мин
       Ks: 6,
       MIC: 4,       // прокси по ампициллину (CLSI S ≤8) — честная пометка
+      MIC2: 0.125,  // энрофлоксацин (CLSI vet: S ≤ 0.25)
       kd: 0.08,
       kmax: 2.8, H: 1.2,
       color: [255, 183, 77], css: '#ffb74d',
@@ -73,6 +80,7 @@
       muMax: 1.0,   // td ≈ 42 мин
       Ks: 6,
       MIC: 0.25,    // очень чувствителен (ампициллин S ≤0.5, CLSI vet)
+      MIC2: 0.03,   // энрофлоксацин — очень чувствителен
       kd: 0.1,
       kmax: 3.0, H: 1.2,
       color: [174, 213, 129], css: '#aed581',
@@ -84,12 +92,34 @@
       muMax: 1.9,   // фитнес-цена резистентности ~10%
       Ks: 4,
       MIC: 64,      // β-лактамаза (низкопродуцирующий TEM-вариант): ≥64 мг/л
+      MIC2: 0.06,   // β-лактамаза НЕ защищает от фторхинолона (другая мишень)
       kd: 0.08,
       kmax: 3.0, H: 1.2,
       color: [240, 98, 146], css: '#f06292',
       resSource: 0, // мутант E. coli
     },
   ];
+
+  // ---------- Классы антибиотиков (v1.4): два препарата — две философии дозирования ----------
+  // kmax/H = 0 → использовать видовые (β-лактам); > 0 — переопределить фармакодинамику класса.
+  // PAE — пост-антибиотический эффект: после падения A < MIC популяция не растёт ещё pae часов
+  // (фторхинолоны 1–4 ч; β-лактамы на грамотрицательных ≈ 0 — честно ноль).
+  // PD-индекс: амоксициллин — time-dependent, цель fT>MIC 40–70% (Berry 2022);
+  // энрофлоксацин — concentration-dependent, цель AUC24/MIC ≥ 100–125 для
+  // грамотрицательных (McKellar & Preston 2004; VetCAST/сводка по фторхинолонам).
+  // kelHalf: типовой t½ у КРС (амоксициллин IM ≈ 1 ч, Kreil 2012; энрофлоксацин ≈ 3 ч).
+  const DRUGS = {
+    amox: {
+      id: 'amox', name: 'Амоксициллин', cls: 'β-лактам · time-dependent',
+      kelHalf: 1.0, kmax: 0, H: 0, pae: 0, coupling: true,
+      pdIndex: 'T>MIC', pdTarget: '40–70%',
+    },
+    enro: {
+      id: 'enro', name: 'Энрофлоксацин', cls: 'фторхинолон · concentration-dependent',
+      kelHalf: 3.0, kmax: 8.0, H: 1.6, pae: 2.0, coupling: false,
+      pdIndex: 'AUC24/MIC', pdTarget: '≥ 125',
+    },
+  };
 
   // ---------- Параметры среды/антибиотика ----------
   const ENV_DEFAULTS = {
@@ -144,6 +174,17 @@
     };
     st._rng = mulberry32(st.seed);
     st._pers = env.persA > 0; // слой персистеров включён (детерминированный, без rng)
+    // v1.4: класс антибиотика — переопределяет фармакодинамику (kmax/H), связь
+    // «бьёт делящиеся» и PAE. По умолчанию amox — старые сценарии не меняются:
+    // pae=0 (массив _pae не растёт), видовые kmax/H как были.
+    st.drugId = (cfg.drug && DRUGS[cfg.drug]) ? cfg.drug : 'amox';
+    st.drug = DRUGS[st.drugId];
+    st._paeTau = (env.pae != null) ? env.pae : st.drug.pae; // env.pae — override для тестов
+    st._pae = new Float32Array(n); // память экспозиции АБ (декей по PAE) — без rng
+    if (st.drug.kmax > 0) {
+      for (let s = 0; s < species.length; s++) { species[s].kmax = st.drug.kmax; species[s].H = st.drug.H; }
+    }
+    st.env.growthKillCoupling = st.drug.coupling;
     // статические полосы АБ («мега-чаша», Baym 2016): доли диаметра чашки [f0..f1]
     if (cfg.abZones && cfg.abZones.length) {
       const mic0 = Math.max(0.01, species[0].MIC);
@@ -285,6 +326,12 @@
         const subA = Math.max(1, Math.ceil(env.DA * dt / 0.11));
         diffuse(st.A, st._tmpA, W, H, env.DA, dt, subA);
       }
+      // v1.4-фикс «стенка чашки»: Neumann-граница на краю БЛЮДЦА, а не сетки — S и A
+      // не диффундируют наружу (физика: стенка петри-диша). До фикса S растекался за
+      // край, раздувая area в stats() → среднее A разбавлялось (инфузия при 99 мг/л
+      // показывала T>MIC 0% вместо ~93%), а болюс «утекал» за край — PD-индексы врали.
+      const m = st.mask;
+      for (let i = 0; i < n; i++) if (!m[i]) { st.S[i] = 0; if (!st.abZones) st.A[i] = 0; }
     }
 
     // 2) антибиотик: статические полосы (Baym 2016) ИЛИ PK: q8h-доливы + элиминация/инфузия
@@ -333,6 +380,10 @@
       newQ[s] = st.q[s] * (1 + muS * dt);                    // dq/dt = μ(S)·q
       const lagF = st.q[s] / (1 + st.q[s]);                  // q/(1+q): лаг-фаза
       const c50s = c50[s], Hs = sp.H;
+      // v1.4-фикс: знаменатель Хилла — A^H + C50^H (как в калибровке c50Of), раньше был
+      // A^H + C50: при H=1.2 давало ~5% сдвига, при H=1.6 (фторхинолон) эффективный
+      // MIC уплывал до ~2.2×MIC. Теперь net-рост = 0 при A = MIC точно при любом H.
+      const c50h = Math.pow(c50s, Hs);
 
       for (let i = 0; i < n; i++) {
         const Si = st.S[i];
@@ -344,8 +395,12 @@
         let Ntot = 0;
         for (let k = 0; k < st.N.length; k++) if (st.enabled[k]) Ntot += st.N[k][i];
         const crow = 1 - Ntot / Nmax;
-        const g = crow <= 0 ? 0
+        let g = crow <= 0 ? 0
           : sp.muMax * lagF * (Si / (sp.Ks + Si)) * crow;    // 1/ч
+        // v1.4 PAE (фторхинолоны): клетки, видевшие АБ выше MIC, после его падения
+        // не растут ещё ~pae часов (бактериостаз — «хвост» time-kill). Память _pae[i]
+        // ставится в 1 при экспозиции здесь же (ниже — kill), а гаснет экспоненциально.
+        if (st._paeTau > 0 && st._pae[i] > 0) g *= 1 - 0.7 * st._pae[i];
 
         // демографический шум (seed-воспроизводимый)
         let gg = g;
@@ -353,9 +408,13 @@
         if (gg < 0) gg = 0;
 
         // гибель от антибиотика: Хилл/Emax; β-лактамы — по делящимся клеткам
-        // (связь с локальным субстратом: в голодных зонах убивают слабее — «персистеры»)
-        let kill = sp.kmax * Math.pow(st.A[i], Hs) / (Math.pow(st.A[i], Hs) + c50s);
+        // (связь с локальным субстратом: в голодных зонах убивают слабее — «персистеры»);
+        // фторхинолоны (coupling=false) бьют и неделящихся — медленнее, но бьют
+        const AH = Math.pow(st.A[i], Hs);
+        let kill = sp.kmax * AH / (AH + c50h);
         if (env.growthKillCoupling) kill *= 0.2 + 0.8 * (Si / (sp.Ks + Si));
+        // v1.4: экспозиция выше MIC текущего вида → перезаряжаем память PAE
+        if (st._paeTau > 0 && st.A[i] > sp.MIC) st._pae[i] = 1;
 
         const deaths = (kill + sp.kd) * Ni * dt;
         let dN = gg * Ni * dt - deaths;
@@ -376,6 +435,13 @@
       }
     }
     st.q = newQ;
+
+    // 4c) v1.4: затухание памяти PAE (τ = pae часа) — детерминированно, без rng;
+    // при drug=pae 0 (амоксициллин) массив навсегда нулевой — старые хэши не меняются
+    if (st._paeTau > 0) {
+      const paeDec = Math.exp(-dt / st._paeTau);
+      for (let i = 0; i < n; i++) if (st._pae[i] > 0) st._pae[i] *= paeDec;
+    }
 
     // 4b) персистеры (v1.3, Balaban 2004): дормантный пул — детерминированно, БЕЗ rng.
     // β-лактам бьёт делящиеся: дормант не растёт, не двигается, не ест и не гибнет.
@@ -578,10 +644,37 @@
     return out;
   }
 
+  // ---------- v1.4: PD-индексы из истории прогона (первые 24 ч, чистая функция) ----------
+  // hist: [{t, A, ...}] — упорядочены по t (A — средняя по чашке из stats()).
+  // fTMIC — доля времени выше MIC (цель β-лактамов 40–70%); auc24 — трапеции;
+  // aucMic = AUC24/MIC (цель фторхинолонов ≥ 100–125); cmaxMic = Cmax/MIC (≥ 8–10).
+  function pdIndices(hist, mic) {
+    const pts = hist.filter(function (p) { return p.t <= 24.0001; });
+    if (pts.length < 2) return null;
+    let tAbove = 0, auc = 0, cmax = Math.max(0, pts[0].A || 0);
+    for (let k = 1; k < pts.length; k++) {
+      const a0 = pts[k - 1].A, a1 = pts[k].A, dt = pts[k].t - pts[k - 1].t;
+      if (dt <= 0) continue;
+      if (a0 >= mic && a1 >= mic) tAbove += dt;
+      else if (a0 > mic && a1 < mic) tAbove += dt * (a0 - mic) / (a0 - a1);
+      else if (a0 < mic && a1 > mic) tAbove += dt * (a1 - mic) / (a1 - a0);
+      auc += (a0 + a1) / 2 * dt;
+      if (a1 > cmax) cmax = a1;
+    }
+    const T = pts[pts.length - 1].t;
+    return {
+      fTMIC: T > 0 ? tAbove / T : 0,
+      auc24: auc, cmax: cmax,
+      aucMic: mic > 0 ? auc / mic : 0,
+      cmaxMic: mic > 0 ? cmax / mic : 0,
+    };
+  }
+
   return {
     mulberry32: mulberry32,
     SPECIES: SPECIES_DEFAULTS,
     ENV: ENV_DEFAULTS,
+    DRUGS: DRUGS,
     MPC_FACTOR: MPC_FACTOR,
     c50Of: c50Of,
     createState: createState,
@@ -600,5 +693,6 @@
     parseParams: parseParams,
     chronFlags: chronFlags,
     chronicleStep: chronicleStep,
+    pdIndices: pdIndices,
   };
 });
