@@ -10,6 +10,7 @@ const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 
 const tpl = read('src/index-template.html');
 const css = read('src/style.css');
+const ds = read('src/vet-ds.css'); // ядро ДС экосистемы — инлайн (офлайн single-file), характер в style.css перекрывает
 const engine = read('src/engine.js');
 const tests = read('src/tests.js');
 const ui = read('src/ui.js');
@@ -21,7 +22,7 @@ const testsBrowser = tests.replace(
 );
 
 const out = tpl
-  .replace('/*__CSS__*/', () => css)
+  .replace('/*__CSS__*/', () => '/* vet-ds — ядро ДС экосистемы (инлайн, офлайн single-file) */\n' + ds + '\n/* ── локальный слой ВетПетри: сине-циановый характер ── */\n' + css)
   .replace('/*__ENGINE__*/', () => engine)
   .replace('/*__TESTS__*/', () => testsBrowser)
   .replace('/*__UI__*/', () => ui);
