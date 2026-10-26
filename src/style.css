@@ -198,3 +198,16 @@ body.projector .chron-list { font-size: 14.5px; max-height: 210px; }
 body.projector .chals > summary, body.projector .chal summary,
 body.projector .chopts, body.projector .chans { font-size: 14.5px; }
 body.projector #layerBar .tool { font-size: 15px; }
+
+/* ── мобильная компакция хедера (Task 165): было 324px статичного верха ── */
+@media (max-width: 640px) {
+  .hdr { flex-wrap: wrap; gap: 8px; padding: 8px 12px; }
+  .hdr h1 { font-size: 16px; }
+  .hdr .sub { font-size: 12px; }
+  .hdr-title { gap: 8px; }
+  .logo svg { width: 20px; height: 20px; }
+  .tagline { font-size: 11px; line-height: 1.45;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+  .badge { font-size: 11px; padding: 3px 10px; }
+  .hint { font-size: 11px; }
+}
