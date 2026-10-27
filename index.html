@@ -34,6 +34,51 @@
           на 640px: лого 38px, кегли вниз, хаб одним скроллящимся рядом,
           safe-area-inset-bottom у подвала. Повод: голос владельца —
           «на телефоне верх занимает большую часть экрана» (Task 165).
+   v2.3.2: формуляр самодостаточен в любой оболочке — блок form дополнил
+          токены текста/бордеров/статусов/теней значениями A-light (грабли
+          §24: в A-dark секция наследовала бы кремовый --ds-text на бежевом).
+          Значения = прежний merge root+form, гейт не меняется. Акцент
+          остаётся характером витрины (пиннинг в тёмной оболочке обязателен).
+          --ds-border-strong затемнён до #857F6E: подчёркивание инпутов —
+          небуквенная графика, WCAG 1.4.11 требует 3:1 (A-light значение
+          давало 1.57 на беж — слепая зона текстового гейта). Плюс фикс
+          print-переанкорки: section[data-theme="form"] в селекторе блока 20 —
+          §25 ниже по файлу побеждал равную специфичность, и стол печатался
+          бежевым при включённых «фонах печати» (нашёл print-гейт vettools).
+   v2.3.3: гейт §1.4.11 стал законом ядра (contrast_v2.py: border-strong ×
+          3 поверхности ≥3:1, rule × bg ≥3:1, --ds-border исключён как
+          декор) — и сразу поймал: root #C8C4B6 = 1.51–1.75, dark #554E44
+          = 1.60–2.02, instrument #353B44 = 1.38–1.60. Фикс: border-strong
+          #857F6E в A-light/A-dark (сепия-тушь единая с формуляром, худшая
+          3.28:1) и #6A7590 в C (сталь, худшая 3.38:1). Task 175.
+   v2.3.4: --ds-accent-text «акцент-тушь» — терракота, разведённая чер--
+          нилами текста (color-mix от --ds-accent: характер витрины едет
+          автоматически). Закрывает слепую зону «акцент-как-текст»:
+          чистый акцент как текст = 4.38:1 на беж (root), 3.94 на гра--
+          фите (dark), 3.7 на тинтах бейджей — .ds-overline b, .ds-fn,
+          .ds-badge, .ds-hub a.on, .ds-link:hover теперь на тушы; P=76
+          root/form (худшая 5.13), P=64 dark (худшая 4.84), C — чистая
+          бирюза (5.57). Гейт: contrast_v2 разбирает var()/color-mix.
+   v2.4:  ПОЛЕВОЙ РЕЖИМ — шестая и седьмая темы. [data-theme="field"]
+          «Солнце»: текст 7:1 (AAA — чтение на улице), тач-таргеты
+          ≥48px, тени отключены (солнце их смывает), туша P=56
+          (#782a16, худшая 7.18). [data-theme="night"] — янтарь без
+          синего: синий канал наименьший в КАЖДОМ токене (закон гейта,
+          не вкус), текст ≥7, статусы переведены на тёплые аналоги
+          (blue→песок #D4B47E, violet→тёплый mauve #C9A184), прототип —
+          nightTheme ветэко #16130E. Компоненты: .ds-toast (панель на
+          волоске border-strong, без тени — эталон DsRoute-тост ветвойс),
+          .ds-dl (прогресс скачивания модели: байты × скорость × ETA).
+          Гейты: порог 7:1 для field/night текст-ролей и field-туши;
+          ночь-без-синего проверяется по b<min(r,g) каждого токена.
+   v2.4.1: поповер-фолбэк без Popover API (Chrome < 114, 2023) — сноска
+          деградирует в классическую периодику: маркер не прикидывается
+          кнопкой (курсор/тач сняты через @supports not selector(
+          :popover-open)), текст живёт каноничным дублем — списком
+          .ds-fnotes; дубль скрыт «всегда-закрыт» и показывается
+          :popover-open. Урок QA: @supports (popover: popover) — ложь
+          даже в свежих Chromium (HTML-атрибут ≠ CSS-свойство).
+          Повод: код-ревью Task 178 («сайты тоже»).
    Один файл: токены + компоненты. Подключается витриной как копия
    (репо приватное — CDN недоступен) или git submodule.
 
@@ -50,6 +95,10 @@
      [data-theme="form"]      — B «Формуляр» (голос разделов «действуешь»):
                                  секция на странице A — токены производные,
                                  плотность рабочего стола
+     [data-theme="field"]      — A-полевой «Солнце» (v2.4): текст 7:1 (AAA,
+                                 чтение на солнце), тач ≥48, плоские тени
+     [data-theme="night"]      — полевая ночь (v2.4): янтарь без синего
+                                 (b-канал наименьший во всех токенах)
 
    Витрина-характер: :root { --ds-accent: <светлое значение>; }
    [data-theme="dark"] { --ds-accent: <тёмное значение>; } — все производные
@@ -79,8 +128,9 @@
   --ds-bg:        #FAF9F5;   /* фон страницы — тёплая бумага */
   --ds-surface:   #FFFFFF;   /* карточки, панели */
   --ds-surface2:  #F1EEE6;   /* приподнятые панели, hover-строки */
-  --ds-border:    #E3E0D5;   /* волосяные линии */
-  --ds-border-strong: #C8C4B6; /* hover-бордеры, активные рамки */
+  --ds-border:    #E3E0D5;   /* волосяные линии (декоративные разделители — вне §1.4.11) */
+  --ds-border-strong: #857F6E; /* рамки инпутов/кнопок/чипов: WCAG 1.4.11 ≥3:1 — та же сепия,
+                              что у формуляра с v2.3.2 (было #C8C4B6 = 1.51–1.75:1 — слепая зона) */
   --ds-rule:      #1C1B1A;   /* «чернильные» линейки редакционного слоя (мастхед, № выпусков) */
 
   /* -- Текст --------------------------------------------------------------- */
@@ -100,6 +150,11 @@
   --ds-accent:       #C73E1D;
   --ds-accent-strong: #A93516;   /* hover / активные состояния */
   --ds-accent-ink:   #FFF8F4;    /* текст на заливке акцентом (4.8:1) */
+  --ds-accent-text:  color-mix(in srgb, var(--ds-accent) 76%, var(--ds-text) 24%);
+                     /* v2.3.4 «акцент-тушь»: терракота, разведённая чернилами
+                        текста — акцент-как-ТЕКСТ (§1.4.3, худшая 5.13:1 на тинтах
+                        бейджей; чистый акцент давал 3.7–4.4). Заливки/графика —
+                        по-прежнему чистый --ds-accent */
 
   /* -- Типографика: голос системы ------------------------------------------- */
   --ds-font-display: "Instrument Serif", Georgia, "Times New Roman", serif;
@@ -151,7 +206,8 @@
   --ds-surface:   #2A2620;
   --ds-surface2:  #34302A;
   --ds-border:    #3F3A32;
-  --ds-border-strong: #554E44;
+  --ds-border-strong: #857F6E; /* v2.3.3: ≥3:1 на худшей поверхности #34302A (3.28) — единая
+                              «сепия-тушь» сильных рамок в свете и ночи (было #554E44 = 1.60–2.02) */
   --ds-rule:      #6E685C;   /* ~3:1 на bg: линейка читается, но не «белая полоса» (НЕ --ds-text!) */
 
   --ds-text:      #EDE9E0;   /* 13.7:1 */
@@ -168,6 +224,10 @@
   --ds-accent:       #E06A43;   /* терракота на тёмном (5.0:1) */
   --ds-accent-strong: #EC855F;
   --ds-accent-ink:   #1F0E07;   /* 5.6:1 на заливке */
+  --ds-accent-text:  color-mix(in srgb, var(--ds-accent) 64%, var(--ds-text) 36%);
+                     /* v2.3.4: тёмный акцент слабее на своих поверхностях
+                        (3.4–3.9) — разводим сильнее, к белому чернилу;
+                        худшая 4.84:1 на тинте бейджа */
 
   --ds-shadow:    0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.22);
   --ds-shadow-in: inset 0 1px 0 rgba(255,255,255,.04);
@@ -183,7 +243,8 @@
   --ds-surface:   #1A1D22;
   --ds-surface2:  #20242B;
   --ds-border:    #262A31;
-  --ds-border-strong: #353B44;
+  --ds-border-strong: #6A7590; /* v2.3.3: ≥3:1 на худшей поверхности #20242B (3.38) — сталь
+                              светлее графита, аффорданс рамок (было #353B44 = 1.38–1.60) */
   --ds-rule:      #5A6472;   /* ~3:1 на bg — приборная линейка без неона */
 
   --ds-text:      #E8EAED;   /* 15.0:1 */
@@ -200,6 +261,10 @@
   --ds-accent:       #35C29A;   /* приборная бирюза (8.1:1) */
   --ds-accent-strong: #4AD4AC;
   --ds-accent-ink:   #0C1210;   /* 8.4:1 на заливке */
+  --ds-accent-text:  var(--ds-accent);
+                     /* v2.3.4: C — бирюза чистая, 5.57:1 худшая (тинт
+                        бейджа на surface2); характеры (циан лабораторий)
+                        наследуют автоматически через var() */
 
   --ds-shadow:    0 1px 2px rgba(0,0,0,.35), 0 8px 24px rgba(0,0,0,.25);
   --ds-shadow-in: inset 0 1px 0 rgba(255,255,255,.03);
@@ -207,6 +272,95 @@
 
 /* 1c. Обратная совместимость v0.1: витрины со старым атрибутом светлой темы */
 [data-theme="light"] { color-scheme: light; }
+
+/* --------------------------------------------------------------------------
+   1d. A-полевой «Солнце» (v2.4) — чтение на улице: 7:1, тач ≥48, плоско
+   -------------------------------------------------------------------------- */
+[data-theme="field"] {
+  color-scheme: light;
+
+  /* максимум отражения: чистая бумага, никаких кремовых оттенков;
+     surface2 — единственный тон-шаг (на солнце тонкие различия гибнут) */
+  --ds-bg:        #FFFFFF;
+  --ds-surface:   #FFFFFF;
+  --ds-surface2:  #F0EEE8;
+  --ds-border:    #D9D5C8;   /* декор — вне §1.4.11 как и в A-light */
+  --ds-border-strong: #6E6656; /* рамки на солнце: 4.89 худшая — в A-light 3.28;
+                                полевой аффорданс должен переживать блики */
+  --ds-rule:      #14110E;
+
+  /* чернила: 7:1 (AAA) на всех поверхностях — порог полевого гейта;
+     faint #524D45 (7.22) — подписи тоже читаются под солнцем */
+  --ds-text:      #14110E;   /* 16.2:1 */
+  --ds-muted:     #47423B;   /* 8.58:1 */
+  --ds-faint:     #524D45;   /* 7.22:1 */
+
+  /* статусы A-light проходят на белом (4.67–5.67) — семантика статусов
+     едина по темам (правило ядра), полевой порог их не трогает */
+  --ds-red:       #B3261E;
+  --ds-green:     #47753A;
+  --ds-amber:     #8A5A14;
+  --ds-orange:    #AC4E18;
+  --ds-blue:      #33608C;
+  --ds-violet:    #6D4FC4;
+
+  --ds-accent:       #C73E1D;   /* заливки — та же терракота (кнопка =
+                                  крупный текст, AA 4.8 хватает) */
+  --ds-accent-strong: #A93516;
+  --ds-accent-ink:   #FFF8F4;
+  --ds-accent-text:  color-mix(in srgb, var(--ds-accent) 56%, var(--ds-text) 44%);
+                     /* полевая туша P=56 (#782a16, худшая 7.18 на тинте):
+                        акцент-как-текст на солнце — тоже AAA */
+
+  /* солнце смывает тени — плоскость как у формуляра (print-паттерн) */
+  --ds-shadow:    none;
+  --ds-shadow-in: none;
+
+  /* фокус толще: 5px контур — на солнце 4px теряется в блике */
+  --ds-focus: 0 0 0 2px var(--ds-bg), 0 0 0 5px var(--ds-accent);
+}
+
+/* --------------------------------------------------------------------------
+   1e. Полевая ночь (v2.4) — янтарь без синего: тёмная адаптация глаз
+   -------------------------------------------------------------------------- */
+[data-theme="night"] {
+  color-scheme: dark;
+
+  /* прототип — nightTheme ветэко (#16130E): тёплый чёрный, синий канал
+     в КАЖДОМ токене — наименьший (закон contrast_v2: b < min(r,g));
+     ночь не вышибает родопсин — можно вернуться к работе с фонариком */
+  --ds-bg:        #16130E;
+  --ds-surface:   #1D1912;
+  --ds-surface2:  #262017;
+  --ds-border:    #3A3428;
+  --ds-border-strong: #8A8270;  /* 4.23 худшая — тёплой стали хватает */
+  --ds-rule:      #E6DAC2;
+
+  --ds-text:      #E6DAC2;   /* 11.7:1 — тёплые чернила */
+  --ds-muted:     #C2B599;   /* 7.96:1 — тоже за полевым порогом 7 */
+  --ds-faint:     #A2957B;   /* 5.47:1 — метаданные, AA (не полевой порог) */
+
+  /* статусы — тёплые аналоги: СИНЕГО НЕТ (blue→песок, violet→тёплый mauve);
+     семантика сохранена позицией в API, не оттенком */
+  --ds-red:       #E8785A;
+  --ds-green:     #BFB15E;
+  --ds-amber:     #E8C068;
+  --ds-orange:    #E8A05C;
+  --ds-blue:      #D4B47E;   /* «инфо» песочный — синий канал наименьший */
+  --ds-violet:    #C9A184;   /* категориальный — тёплый mauve */
+
+  --ds-accent:       #E8A25C;   /* янтарь (8.5 с чернилами) */
+  --ds-accent-strong: #F0B876;
+  --ds-accent-ink:   #1F1305;
+  --ds-accent-text:  color-mix(in srgb, var(--ds-accent) 86%, var(--ds-text) 14%);
+                     /* ночная туша почти чистый янтарь (худшая 6.33 на тинте):
+                        разводить сильнее незачем — глаз ночью и так контрастный */
+
+  --ds-shadow:    0 1px 2px rgba(0,0,0,.55), 0 8px 24px rgba(0,0,0,.45);
+  --ds-shadow-in: inset 0 1px 0 rgba(232,218,194,.05);
+
+  --ds-focus: 0 0 0 2px var(--ds-bg), 0 0 0 4px var(--ds-accent);
+}
 
 /* --------------------------------------------------------------------------
    2. Базовая типографика ДС
@@ -232,7 +386,7 @@
   letter-spacing: -.01em;
   margin: 0 0 var(--ds-space-3);
 }
-.ds-display em { color: var(--ds-accent); font-style: italic; }
+.ds-display em { color: var(--ds-accent-text); font-style: italic; }
 
 .ds-display--hero {
   font-size: var(--ds-text-hero);
@@ -250,7 +404,7 @@
   color: var(--ds-muted);
   margin: 0 0 var(--ds-space-3);
 }
-.ds-overline b { color: var(--ds-accent); font-weight: 500; }
+.ds-overline b { color: var(--ds-accent-text); font-weight: 500; }
 
 /* подпись «Рис. N — ...» под иллюстрацией/графиком */
 .ds-figure { margin: 0; }
@@ -261,11 +415,11 @@
   line-height: 1.5;
   color: var(--ds-faint);
 }
-.ds-figure__caption b { color: var(--ds-accent); font-weight: 500; }
+.ds-figure__caption b { color: var(--ds-accent-text); font-weight: 500; }
 
 /* сноска в тексте и подвал сносок */
 .ds-fn {
-  color: var(--ds-accent);
+  color: var(--ds-accent-text);
   font-family: var(--ds-font-mono);
   font-size: .62em;
   vertical-align: super;
@@ -310,7 +464,7 @@
   font-size: 3em;
   line-height: .82;
   padding: .05em .12em 0 0;
-  color: var(--ds-accent);
+  color: var(--ds-accent-text);
 }
 
 /* спарклайн: орнамент = данные (svg viewBox="0 0 100 30" preserveAspectRatio="none") */
@@ -503,7 +657,7 @@ a.ds-chip:hover { border-color: var(--ds-text); color: var(--ds-text); }
   font-weight: 700;
   line-height: 1.4;
   background: color-mix(in srgb, var(--ds-accent) 12%, transparent);
-  color: var(--ds-accent);
+  color: var(--ds-accent-text);
 }
 .ds-badge--red    { background: color-mix(in srgb, var(--ds-red)    12%, transparent);    color: var(--ds-red); }
 .ds-badge--green  { background: color-mix(in srgb, var(--ds-green)  12%, transparent);  color: var(--ds-green); }
@@ -714,7 +868,7 @@ a.ds-chip:hover { border-color: var(--ds-text); color: var(--ds-text); }
   border-color: color-mix(in srgb, var(--ds-muted) 40%, transparent);
 }
 .ds-hub a.on, .ds-hub a[aria-current="page"] {
-  color: var(--ds-accent);
+  color: var(--ds-accent-text);
   border-color: color-mix(in srgb, var(--ds-accent) 45%, transparent);
   background: color-mix(in srgb, var(--ds-accent) 12%, transparent);
 }
@@ -749,7 +903,7 @@ a.ds-chip:hover { border-color: var(--ds-text); color: var(--ds-text); }
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
 }
-.ds-link:hover { color: var(--ds-accent); }
+.ds-link:hover { color: var(--ds-accent-text); }
 
 /* абзац-пояснение под заголовком секции */
 .ds-lede {
@@ -927,8 +1081,9 @@ a.ds-chip:hover { border-color: var(--ds-text); color: var(--ds-text); }
 /* Карточки-ссылки — focus-visible; :focus-within убран (урок exp-form): иначе
    фокус в инпуте обводит рамкой всю карточку — шум вместо навигации. */
 .ds-tabs :focus-visible, .ds-page-btn:focus-visible, .ds-btn:focus-visible,
-.ds-input:focus-visible, .ds-select:focus-visible, .ds-chip:focus-visible,
-.ds-link:focus-visible, a.ds-card:focus-visible, .ds-card[tabindex]:focus-visible {
+.ds-input:focus-visible, .ds-select:focus-visible, .ds-textarea:focus-visible,
+.ds-chip:focus-visible, .ds-link:focus-visible, a.ds-card:focus-visible,
+.ds-card[tabindex]:focus-visible {
   outline: 2px solid var(--ds-accent);
   outline-offset: 2px;
 }
@@ -945,9 +1100,14 @@ a.ds-chip:hover { border-color: var(--ds-text); color: var(--ds-text); }
 /* -- 20. Печать ---------------------------------------------------------------- */
 @media print {
   /* все голоса переанкориваются на бумагу, включая form и light (иначе формуляр
-     печатался бы с бежевой заливкой при включённых «фонах печати») */
+     печатался бы с бежевой заливкой при включённых «фонах печати»).
+     v2.3.2: section[data-theme="form"] добавлен с ПОВЫШЕННОЙ специфичностью —
+     блок §25 стоит ниже по файлу, и при равной специфичности бежевый --ds-bg
+     побеждал print-переанкорку (нашли print-гейтом vettools, Task 170) */
   :root, [data-theme="light"], [data-theme="dark"], [data-theme="instrument"],
-  [data-theme="form"] {
+  [data-theme="form"], section[data-theme="form"],
+  [data-theme="field"], section[data-theme="field"],
+  [data-theme="night"], section[data-theme="night"] {
     color-scheme: light;
     --ds-bg: #FFFFFF; --ds-surface: #FFFFFF; --ds-surface2: #F5F4F0;
     --ds-border: #CCCCCC; --ds-border-strong: #999999; --ds-rule: #1C1B1A;
@@ -957,7 +1117,7 @@ a.ds-chip:hover { border-color: var(--ds-text); color: var(--ds-text); }
   body { background: #fff !important; }
   .ds-hub, .ds-theme-toggle, .ds-theme-toggle--labeled,
   .ds-pagination, .ds-tabs, .ds-btn--icon,
-  .ds-ba, input[type="range"] { display: none !important; }
+  .ds-ba, .ds-toast, .ds-dl, input[type="range"] { display: none !important; }
   .ds-card, .ds-masthead { box-shadow: none !important; break-inside: avoid; }
   a.ds-link { color: #1C1B1A !important; text-decoration: none; }
   a.ds-link[href^="http"]::after {
@@ -1046,12 +1206,36 @@ section[data-theme="dark"], section[data-theme="instrument"], section[data-theme
   --ds-surface: #FFFFFF;
   --ds-surface2: #EEEAE0;
   --ds-border: #D9D5C8;
+  /* v2.3.2: карандашное подчёркивание инпутов — WCAG 1.4.11 (небуквенная графика ≥3:1):
+     A-light #C8C4B6 давал лишь 1.57:1 на беж (слепая зона текстового гейта) */
+  --ds-border-strong: #857F6E;   /* bg 3.60 / white 3.99 / surface2 3.32 */
+  --ds-rule: #1C1B1A;
+  --ds-text: #1C1B1A;
+  --ds-muted: #5B564C;
+  --ds-faint: #6E695C;
+  /* v2.3.2: формуляр САМОДОСТАТОЧЕН в любой оболочке (грабли §24: кастомные
+     свойства наследуются от html — в A-dark секция получала бы кремовый текст
+     на бежевом). Все токены ниже = значения A-light (гейт их уже проверял как
+     merge root+form — результат не меняется). Акцент НЕ пиннится: характер
+     витрины обязана закрепить сама (в тёмной оболочке пиннинг обязателен —
+     см. README «Раскатка голоса B»). */
+  --ds-red: #B3261E;
+  --ds-amber: #8A5A14;
+  --ds-blue: #33608C;
+  --ds-violet: #6D4FC4;
   /* статусы чуть темнее корня: бежевая поверхность съедает контраст
      (#47753A давал лишь 4.51 на surface2 — впритык) */
   --ds-green: #456F38;
   --ds-orange: #A84C16;
+  --ds-shadow:    0 1px 2px rgba(28,27,26,.05), 0 10px 28px rgba(28,27,26,.06);
+  --ds-shadow-in: inset 0 1px 0 rgba(255,255,255,.6);
   --ds-radius: 6px;
   --ds-radius-s: 3px;
+  /* v2.3.4: формуляр объявляет СВОЮ тушь (var() резолвится на элементе
+     секции — акцент берётся окружением/пином, чернила — формулярные):
+     в тёмной оболочке без этого секция наследовала бы светло-лососевую
+     тушь A-dark на бежевой бумаге формуляра */
+  --ds-accent-text: color-mix(in srgb, var(--ds-accent) 76%, var(--ds-text) 24%);
   color: var(--ds-text);
   font-variant-numeric: tabular-nums;
 }
@@ -1126,6 +1310,23 @@ section[data-theme="dark"], section[data-theme="instrument"], section[data-theme
     /* урок QA: маркер у нижней кромки — поповер уезжал за экран;
        нет места снизу — перекладываемся над строкой */
     position-try-fallbacks: flip-block;
+  }
+}
+/* Деградация без Popover API (Chrome < 114, 2023): сноска остаётся
+   классической периодикой — маркер НЕ прикидывается кнопкой (курсор-
+   рука и тач-обещание сняты), текст живёт каноничным дублем —
+   списком .ds-fnotes внизу выпуска.
+   Урок QA (Task 179, пойман браузером): @supports (popover: popover) —
+   ЛОЖЬ даже в свежих Chromium с рабочим поповером (popover — HTML-
+   атрибут, не CSS-свойство); детект — selector(:popover-open).
+   Поэтому дубль скрыт «всегда-закрыт» без @supports вовсе: без API
+   он не умеет ни открываться, ни прятаться сам — торчал бы блоком
+   с рамкой и дублировал список; с API показывается :popover-open. */
+.ds-fn-pop { display: none; }
+.ds-fn-pop:popover-open { display: block; }
+@supports not selector(:popover-open) {
+  .ds-fn[popovertarget] {
+    cursor: default; touch-action: auto;
   }
 }
 
@@ -1244,6 +1445,74 @@ section[data-theme="dark"], section[data-theme="instrument"], section[data-theme
   .ds-footer { padding-bottom: calc(var(--ds-space-4) + env(safe-area-inset-bottom, 0px)); }
   .ds-footer--meta { gap: 6px; }
 }
+
+/* -- 31. Полевые компоненты v2.4 (.ds-toast, .ds-dl, тач field) ---------------- */
+
+/* Тост DS: панель на волоске border-strong, БЕЗ тени — эталон перенесён
+   из DsRoute-тоста ветвойс (тень на полевом экране = шум; hairline держит
+   форму и на солнце, и в ночи). Показ/скрытие — событие витрины
+   (JS-слой: добавить класс .show; print — см. блок 20). */
+.ds-toast {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--ds-space-7) + env(safe-area-inset-bottom, 0px));
+  z-index: 60;
+  max-width: min(92vw, 420px);
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  padding: 10px var(--ds-space-4);
+  background: var(--ds-surface2);
+  border: 1px solid var(--ds-border-strong);
+  border-radius: var(--ds-radius);
+  font-size: var(--ds-text-s);
+  color: var(--ds-text);
+}
+.ds-toast b { color: var(--ds-accent-text); font-weight: 600; }
+.ds-toast--err b { color: var(--ds-red); }
+
+/* Прогресс скачивания модели (прецедент: vosk-модель 46 МБ ветвойс):
+   бары × скорость × ETA — цифры моно, не пляшут. Ширина заливки —
+   инлайн-переменная --ds-dl-p (0–100%), витрина обновляет по своим
+   событиям; transition на --ds-dur — гейт a11y проходит. */
+.ds-dl {
+  display: grid;
+  gap: var(--ds-space-2);
+}
+.ds-dl__bar {
+  height: 6px;
+  border-radius: var(--ds-radius-s);
+  background: var(--ds-surface2);
+  overflow: hidden;
+}
+.ds-dl__fill {
+  height: 100%;
+  width: var(--ds-dl-p, 0%);
+  background: var(--ds-accent);
+  border-radius: inherit;
+  transition: width var(--ds-dur) var(--ds-ease);
+}
+.ds-dl__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--ds-space-3);
+  font-family: var(--ds-font-mono);
+  font-size: var(--ds-text-xs);
+  color: var(--ds-faint);
+}
+.ds-dl__meta b { color: var(--ds-accent-text); font-weight: 500; }
+@media (prefers-reduced-motion: reduce) { .ds-dl__fill { transition: none; } }
+
+/* Полевой тач ≥48px (голос «Солнце»): палец в перчатке не промахивается.
+   Чипы не трогаем — они вторичные фильтры, не полевые действия. */
+[data-theme="field"] .ds-btn { min-height: 48px; font-size: var(--ds-text-m); }
+[data-theme="field"] .ds-input,
+[data-theme="field"] .ds-select,
+[data-theme="field"] .ds-textarea { min-height: 48px; font-size: 15px; }
+[data-theme="field"] .ds-tab { min-height: 48px; }
+[data-theme="field"] .ds-page-btn { min-height: 48px; min-width: 48px; }
+[data-theme="field"] .ds-hub a { min-height: 48px; }
 
 /* ── локальный слой ВетПетри: сине-циановый характер ── */
 :root {
