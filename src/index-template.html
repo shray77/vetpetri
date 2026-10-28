@@ -46,7 +46,7 @@
 
     <div class="toolbar">
       <button id="btnPlay" class="btn primary">▶ Пуск</button>
-      <button id="btnStep" class="btn">Шаг +1 ч</button>
+      <button id="btnStep" class="btn">Шаг +1 ч</button>
       <button id="btnReset" class="btn">Сброс</button>
       <button id="btnCSV" class="btn sm" title="Скачать историю (КОЕ, среда) как CSV — для отчёта по лабе">CSV</button>
       <button id="btnPNG" class="btn sm" title="Скачать чашу как PNG">PNG</button>
@@ -54,14 +54,14 @@
       <span class="tb-sep"></span>
       <span class="tb-label">Скорость:</span>
       <select id="selSpeed" class="sel">
-        <option value="0.5">0.5 ч/с — вдумчиво</option>
-        <option value="2">2 ч/с</option>
-        <option value="8" selected>8 ч/с</option>
-        <option value="20">20 ч/с</option>
-        <option value="40">40 ч/с — турбо</option>
+        <option value="0.5">0.5 ч/с — вдумчиво</option>
+        <option value="2">2 ч/с</option>
+        <option value="8" selected>8 ч/с</option>
+        <option value="20">20 ч/с</option>
+        <option value="40">40 ч/с — турбо</option>
       </select>
       <span class="tb-sep"></span>
-      <span id="clock" class="clock">t = 0 ч</span>
+      <span id="clock" class="clock">t = 0 ч</span>
     </div>
 
     <div class="tools">
@@ -124,15 +124,15 @@
       </select></div>
     <div class="dose-row">
       <input id="dose" type="range" min="-10" max="241" value="18" step="1">
-      <div class="dose-read"><b id="doseVal">4.0 мг/л</b> <span id="doseX">= 1.0×MICwt</span></div>
+      <div class="dose-read"><b id="doseVal">4.0 мг/л</b> <span id="doseX">= 1.0×MICwt</span></div>
     </div>
     <div class="dose-zones"><span class="z z1">рост</span><span class="z z2">окно селекции</span><span class="z z3">подавление</span></div>
     <div class="dose-scale"><span>0.1</span><span id="micTick">MIC 4</span><span id="mpcTick">MPC 32</span><span>256</span></div>
     <div class="kv"><label>Режим введения <span class="muted">(пресет 3)</span></label>
       <select id="doseMode" class="sel">
-        <option value="bolus">1 болюс</option>
-        <option value="q8h">3 введения (q8h)</option>
-        <option value="infusion">инфузия 24 ч</option>
+        <option value="bolus">1 болюс</option>
+        <option value="q8h">3 введения (q8h)</option>
+        <option value="infusion">инфузия 24 ч</option>
       </select></div>
     <div id="pkBadge" class="pk-badge" style="display:none"></div>
     <div class="kv"><label>t½ в хозяине, ч</label><input id="kel" type="number" value="1.0" min="0" step="0.1"></div>
@@ -146,8 +146,8 @@
     <div class="kv"><label>Персистеры <span class="muted">(Balaban 2004)</span></label>
       <select id="persMode" class="sel">
         <option value="off" selected>выкл</option>
-        <option value="wt">дикий тип (a=1.2·10⁻⁶ ч⁻¹)</option>
-        <option value="hip">hipQ-мутант (a=10⁻³ ч⁻¹)</option>
+        <option value="wt">дикий тип (a=1.2·10⁻⁶ ч⁻¹)</option>
+        <option value="hip">hipQ-мутант (a=10⁻³ ч⁻¹)</option>
       </select></div>
 
     <h2>Виды <span class="muted">(галочка — вид сразу на чаше; если его не было, сеется капля)</span></h2>
@@ -187,7 +187,7 @@
     <div class="disclaimer">
       <b>Честные упрощения.</b> Нет: иммунной системы, биоплёнок, горизонтального переноса генов
       (плазмиды/фаги), метаболизма лекарства в тканях, хозяина вообще. Рост — на плоскости, одна
-      среда, 37 °C; расширение колоний — эффективная подвижность (фронт Кольмогорова), не жгутики.
+      среда, 37 °C; расширение колоний — эффективная подвижность (фронт Кольмогорова), не жгутики.
       Параметры — приближения из литературы (см. источники), единицы субстрата —
       условные. Скорость мутации демо-завышена (в реале точечные события ~10⁻⁹–10⁻¹⁰ на п.н./деление,
       резистентность чаще приходит извне или горизонтально). <b>Не для клинических решений.</b>

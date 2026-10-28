@@ -28,13 +28,27 @@
   let chron = [], chronFl = null, chronDirty = false; // хроника событий (v1.2)
 
   // ---------- параметры видов из UI ----------
+  // Task 184 (урок Task 178: молчаливое «самоисправление» хуже явной ошибки): «0»/мусор/
+  // отрицательное значение в μmax/MIC больше не подставляет видовой дефолт ТИХО —
+  // валидация с честным сообщением в hint и возвратом поля к дефолту. Ks в UI не вводится.
+  function paramOrReject(inp, def, min, what, spName) {
+    const raw = inp.value;
+    const v = parseFloat(raw);
+    if (!isFinite(v) || v < min) {
+      if ($('hint')) $('hint').textContent = 'Параметр «' + what + '» (' + spName + '): «' + raw +
+        '» не годится — нужно число ≥ ' + min + '. Вернул ' + def + '.';
+      inp.value = def;
+      return def;
+    }
+    return v;
+  }
   function uiSpecies() {
     const list = [];
     for (let i = 0; i < E.SPECIES.length; i++) {
       const sp = E.SPECIES[i];
       list.push(Object.assign({}, sp, {
-        muMax: parseFloat($('sp-mu-' + i).value) || sp.muMax,
-        MIC: parseFloat($('sp-mic-' + i).value) || sp.MIC,
+        muMax: paramOrReject($('sp-mu-' + i), sp.muMax, 0.1, 'μmax', sp.name),
+        MIC: paramOrReject($('sp-mic-' + i), sp.MIC, 0.01, 'MIC', sp.name),
         enabled: $('sp-en-' + i).checked,
       }));
     }
@@ -303,13 +317,15 @@
     const d = doseVal();
     const mic = st && st.species[0] ? st.species[0].MIC : E.SPECIES[0].MIC; // MIC активного АБ
     const x = d / mic;
-    $('doseVal').textContent = (d >= 10 ? d.toFixed(0) : d >= 1 ? d.toFixed(1) : d.toFixed(2)) + ' мг/л';
+    $('doseVal').textContent = (d >= 10 ? d.toFixed(0) : d >= 1 ? d.toFixed(1) : d.toFixed(2)) + '\u00a0мг/л';
     $('doseX').textContent = '= ' + (x >= 10 ? x.toFixed(0) : x >= 1 ? x.toFixed(1) : x.toFixed(2)) + '\u00d7MICwt';
   }
 
   // ---------- PK: бейдж PD-индекса (v1.4 — по классу АБ) ----------
   // амоксициллин: T>MIC — доля первых суток выше MICwt, цель 40–70% (Berry 2022);
   // энрофлоксацин: AUC24/MIC (цель ≥ 100–125, McKellar & Preston 2004) + Cmax/MIC (≥ 8–10).
+  // Task 184: оба индекса — из одного E.pdIndices (унификация методик: раньше амоксициллин
+  // считался поточечно, энро — интерполяцией пересечений порога).
   function updatePKBadge() {
     const el = $('pkBadge');
     if (!el) return;
@@ -326,18 +342,14 @@
         pi.cmaxMic.toFixed(1) + ' [≥ 8–10] [' + modeLabel + '] — доза та же → AUC тот же, режим меняет только пик';
       el.className = 'pk-badge ' + (aucOk ? 'ok' : 'bad');
     } else {
-      let above = 0, n = 0;
-      for (let k = 0; k < history.length; k++) {
-        if (history[k].t > 24.001) continue; // первые сутки
-        n++;
-        if (history[k].A > mic) above++;
-      }
-      if (!n) { el.style.display = 'none'; return; }
-      const f = above / n;
+      // Task 184: T>MIC — как и AUC-бейдж выше, из E.pdIndices (линейные пересечения порога),
+      // а не поточечный подсчёт доли записей истории
+      const pi = E.pdIndices(history, mic);
+      if (!pi) { el.style.display = 'none'; return; }
       el.style.display = '';
-      el.textContent = 'T>MIC (0–24 ч): ' + (f * 100).toFixed(0) + '% [' + modeLabel +
+      el.textContent = 'T>MIC (0–24\u00a0ч): ' + (pi.fTMIC * 100).toFixed(0) + '% [' + modeLabel +
         '] · цель для β-лактамов 40–70%';
-      el.className = 'pk-badge ' + (f >= 0.4 ? 'ok' : 'bad');
+      el.className = 'pk-badge ' + (pi.fTMIC >= 0.4 ? 'ok' : 'bad');
     }
   }
 
@@ -397,7 +409,7 @@
     let html = '';
     for (let k = chron.length - 1; k >= 0; k--) {
       const e = chron[k];
-      html += '<div class="ev"><span class="dot ' + e.cls + '"></span>t=' + e.t.toFixed(1) + ' ч — ' + e.txt + '</div>';
+      html += '<div class="ev"><span class="dot ' + e.cls + '"></span>t=' + e.t.toFixed(1) + '\u00a0ч — ' + e.txt + '</div>';
     }
     box.innerHTML = html || '<div class="ev muted">пока тихо — события появятся по ходу прогона</div>';
     box.scrollTop = 0;
@@ -505,7 +517,7 @@
     requestAnimationFrame(loop);
   }
 
-  function updateClock() { $('clock').textContent = 't = ' + st.t.toFixed(1) + ' ч'; }
+  function updateClock() { $('clock').textContent = 't = ' + st.t.toFixed(1) + '\u00a0ч'; }
 
   // слой чаши (F10): переключение + подсказка
   function setLayer(l) {
@@ -530,7 +542,7 @@
       html += '<span class="lg">доля R: <b>' + (s.resFrac * 100).toFixed(1) + '%</b></span>';
     }
     html += '<span class="lg muted2">S: ' + (s.S / st.env.S0 * 100).toFixed(0) + '% · A: ' +
-      (s.A >= 10 ? s.A.toFixed(0) : s.A.toFixed(1)) + ' мг/л</span>';
+      (s.A >= 10 ? s.A.toFixed(0) : s.A.toFixed(1)) + '\u00a0мг/л</span>';
     if (st._pers) html += '<span class="lg muted2">персистеры: ' + fmtExp(s.pers) + '</span>';
     $('legend').innerHTML = html;
   }
@@ -539,8 +551,28 @@
   const ch1 = $('chart1'), c1 = ch1.getContext('2d');
   const ch2 = $('chart2'), c2 = ch2.getContext('2d');
 
+  // Task 184: читаемые оси на мобильных. Канвы больше не «сжимаются» CSS-ом из 960px-буфера
+  // (на 380px-экране 10px-шрифт осей превращался в ~4px): буфер перезадаём под фактическую
+  // ширину контейнера × devicePixelRatio и рисуем в CSS-пикселях (setTransform); шрифт осей —
+  // max(10px CSS, пропорция от канонической 960px-канвы) — на десктопе ≥960px вид прежний.
+  // hCss0 — высота канонической канвы (170/130/160): пропорцию и CSS-высоту сохраняем.
+  function fitChart(cv, hCss0) {
+    const cw = cv.clientWidth || 960; // details закрыт (chart3) — каноническая ширина
+    const dpr = Math.min(3, window.devicePixelRatio || 1);
+    const hCss = hCss0 * cw / 960;
+    const bw = Math.round(cw * dpr), bh = Math.round(hCss * dpr);
+    if (cv.width !== bw || cv.height !== bh) { cv.width = bw; cv.height = bh; }
+    const ctx = cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // перезапись width сбрасывает состояние контекста
+    return { w: cw, h: hCss, font: Math.max(10, 10 * cw / 960) };
+  }
+
   function drawCharts() {
-    if (!history.length) { c1.clearRect(0, 0, ch1.width, ch1.height); c2.clearRect(0, 0, ch2.width, ch2.height); updatePKBadge(); return; }
+    if (!history.length) {
+      const a = fitChart(ch1, 170), b = fitChart(ch2, 130);
+      c1.clearRect(0, 0, a.w, a.h); c2.clearRect(0, 0, b.w, b.h);
+      updatePKBadge(); return;
+    }
     const tEnd = Math.max(24, st.t);
     drawChart1(tEnd);
     drawChart2(tEnd);
@@ -548,11 +580,11 @@
   }
 
   function drawChart1(tEnd) {
-    const w = ch1.width, h = ch1.height;
+    const f = fitChart(ch1, 170), w = f.w, h = f.h;
     c1.fillStyle = '#0b1018'; c1.fillRect(0, 0, w, h);
     const yLo = 3, yHi = 13;
-    // сетка десятичных
-    c1.strokeStyle = 'rgba(120,150,190,.13)'; c1.fillStyle = '#5f7492'; c1.font = '10px sans-serif';
+    // сетка десятичных; Task 184: подписи осей #6a80a0 — 4.76:1 на #0b1018 (было #5f7492 = 3.99:1)
+    c1.strokeStyle = 'rgba(120,150,190,.13)'; c1.fillStyle = '#6a80a0'; c1.font = f.font.toFixed(1) + 'px sans-serif';
     for (let e = yLo; e <= yHi; e++) {
       const yy = h - (e - yLo) / (yHi - yLo) * h;
       c1.beginPath(); c1.moveTo(30, yy); c1.lineTo(w - 4, yy); c1.stroke();
@@ -561,7 +593,7 @@
     // время
     for (let tt = 0; tt <= tEnd; tt += tEnd > 48 ? 12 : 6) {
       const xx = 30 + tt / tEnd * (w - 34);
-      c1.fillText(tt + 'ч', Math.min(w - 24, xx), h - 2);
+      c1.fillText(tt + '\u00a0ч', Math.min(w - 24, xx), h - 2);
     }
     const anySpecies = [0, 1, 2, 3].filter(function (i) {
       return st.enabled[i] && history.some(function (p) { return p.tot[i] > 100; });
@@ -581,11 +613,11 @@
   }
 
   function drawChart2(tEnd) {
-    const w = ch2.width, h = ch2.height;
+    const f = fitChart(ch2, 130), w = f.w, h = f.h;
     c2.fillStyle = '#0b1018'; c2.fillRect(0, 0, w, h);
     const aMax = Math.max(64, history.reduce(function (m, p) { return Math.max(m, p.A); }, 0)) * 1.05;
     // MIC / MPC пунктиром (шкала A) — активного препарата
-    c2.setLineDash([4, 3]); c2.font = '10px sans-serif';
+    c2.setLineDash([4, 3]); c2.font = f.font.toFixed(1) + 'px sans-serif';
     [[st.species[0].MIC, 'MICwt'], [st.species[0].MIC * E.MPC_FACTOR, 'MPC']].forEach(function (mr) {
       const yy = h - mr[0] / aMax * (h - 8);
       if (yy < 4) return;
@@ -619,13 +651,14 @@
   const ch3 = $('chart3'), c3 = ch3 ? ch3.getContext('2d') : null;
   function drawEmax() {
     if (!c3 || !st) return;
-    const w = ch3.width, h = ch3.height;
+    const f = fitChart(ch3, 160), w = f.w, h = f.h;
     c3.fillStyle = '#0b1018'; c3.fillRect(0, 0, w, h);
     const xLo = st.drugId === 'enro' ? -1.8 : -0.8, xHi = 2.7; // log10 A: энро — от 0.016, амокс. — от 0.16 мг/л
     const yLo = -3.4, yHi = 2.6; // 1/ч
     const X = function (lg) { return 34 + (lg - xLo) / (xHi - xLo) * (w - 42); };
     const Y = function (v) { return h - 4 - (v - yLo) / (yHi - yLo) * (h - 16); };
-    c3.strokeStyle = 'rgba(120,150,190,.13)'; c3.fillStyle = '#5f7492'; c3.font = '10px sans-serif';
+    // Task 184: подписи осей #6a80a0 — 4.76:1 на #0b1018 (было #5f7492 = 3.99:1), шрифт от ширины канвы
+    c3.strokeStyle = 'rgba(120,150,190,.13)'; c3.fillStyle = '#6a80a0'; c3.font = f.font.toFixed(1) + 'px sans-serif';
     for (let v = -3; v <= 2; v++) {
       const yy = Y(v);
       c3.beginPath(); c3.moveTo(34, yy); c3.lineTo(w - 6, yy); c3.stroke();
@@ -766,7 +799,7 @@
         logEvent('посев: ' + st.species[tool.sp].name, 'man');
       }
     }
-    else if (tool.kind === 'drop') { E.dropAB(st, p.x, p.y, doseVal(), 5); logEvent('капля АБ ' + (doseVal() >= 10 ? doseVal().toFixed(0) : doseVal().toFixed(1)) + ' мг/л', 'man'); }
+    else if (tool.kind === 'drop') { E.dropAB(st, p.x, p.y, doseVal(), 5); logEvent('капля АБ ' + (doseVal() >= 10 ? doseVal().toFixed(0) : doseVal().toFixed(1)) + '\u00a0мг/л', 'man'); }
     else if (tool.kind === 'wipe') {
       const R = 5;
       for (let yy = Math.floor(p.y - R); yy <= p.y + R; yy++)
@@ -775,7 +808,7 @@
           if ((xx - p.x) * (xx - p.x) + (yy - p.y) * (yy - p.y) > R * R) continue;
           for (let s = 0; s < 4; s++) st.N[s][yy * W + xx] = 0;
         }
-      logEvent('стёрты колонии', 'man');
+      logEvent('стёрты колонии.', 'man');
     }
     render(); updateLegend();
   }
@@ -796,7 +829,7 @@
     if (dragging || !E.inside(st, cxi, cyi)) { probe.style.display = 'none'; return; }
     const i = cyi * W + cxi;
     const mic = st.species[0].MIC;
-    let rows = '<b>A</b> ' + (st.A[i] >= 10 ? st.A[i].toFixed(0) : st.A[i].toFixed(1)) + ' мг/л (' +
+    let rows = '<b>A</b> ' + (st.A[i] >= 10 ? st.A[i].toFixed(0) : st.A[i].toFixed(1)) + '\u00a0мг/л (' +
       (st.A[i] / mic).toFixed(1) + '×MIC) · <b>S</b> ' + (st.S[i] / st.env.S0 * 100).toFixed(0) + '%';
     for (let s = 0; s < 4; s++) {
       if (!st.enabled[s] || st.N[s][i] < 1) continue;
@@ -820,26 +853,41 @@
     $('toolDrop').classList.toggle('active', kind === 'drop');
     $('toolWipe').classList.toggle('active', kind === 'wipe');
     $('hint').textContent = kind === 'seed' ? 'Кликай по чаше — сеешь «' + E.SPECIES[tool.sp].name + '» (клик по кнопке меняет вид)'
-      : kind === 'drop' ? 'Кликай по чаше — капля антибиотика ' + (doseVal() >= 10 ? doseVal().toFixed(0) : doseVal().toFixed(1)) + ' мг/л'
+      : kind === 'drop' ? 'Кликай по чаше — капля антибиотика ' + (doseVal() >= 10 ? doseVal().toFixed(0) : doseVal().toFixed(1)) + '\u00a0мг/л'
       : 'Кликай по чаше — стираешь колонии';
   }
 
   // ---------- тесты моделей ----------
+  // Task 184: chunked-прогон — тесты из T.tests идут по одному в свой setTimeout: между
+  // тестами браузер успевает перерисовать прогресс, кнопка «Прогнать заново» не подвешивает
+  // страницу на весь синхронный прогон (node CLI гоняет тот же список через runAll).
   function runTests(cb) {
     const badge = $('modelBadge');
     badge.textContent = 'модели: проверка\u2026'; badge.className = 'badge';
     $('testsOut').innerHTML = '<div class="t-det">считаю\u2026</div>';
-    setTimeout(function () {
-      const res = T.runAll();
-      const ok = res.filter(function (r) { return r.pass; }).length;
-      badge.textContent = 'модели: ' + ok + '/' + res.length + (ok === res.length ? ' \u2713' : ' \u2717');
-      badge.className = 'badge ' + (ok === res.length ? 'ok' : 'bad');
-      $('testsOut').innerHTML = res.map(function (r) {
-        return '<div class="t-row"><div class="t-name ' + (r.pass ? 't-pass">PASS \u2713 ' : 't-fail">FAIL \u2717 ') +
-          r.name + '</div><div class="t-det">' + r.details + '</div></div>';
-      }).join('');
-      if (cb) cb(ok, res.length);
-    }, 60);
+    const res = [];
+    const fns = (T.tests || []).slice();
+    (function next() {
+      if (!fns.length) {
+        const ok = res.filter(function (r) { return r.pass; }).length;
+        badge.textContent = 'модели: ' + ok + '/' + res.length + (ok === res.length ? ' \u2713' : ' \u2717');
+        badge.className = 'badge ' + (ok === res.length ? 'ok' : 'bad');
+        if (cb) cb(ok, res.length);
+        return;
+      }
+      setTimeout(function () {
+        const f = fns.shift();
+        let r;
+        try { r = f(); } catch (e) { r = { name: f.name, pass: false, details: 'ошибка: ' + e.message }; }
+        res.push(r);
+        $('testsOut').innerHTML = res.map(function (r) {
+          return '<div class="t-row"><div class="t-name ' + (r.pass ? 't-pass">PASS \u2713 ' : 't-fail">FAIL \u2717 ') +
+            r.name + '</div><div class="t-det">' + r.details + '</div></div>';
+        }).join('');
+        badge.textContent = 'модели: ' + res.filter(function (r) { return r.pass; }).length + '/' + res.length + '\u2026';
+        next();
+      }, 0);
+    })();
   }
 
   // ---------- экспорт / шаринг / проектор ----------
@@ -959,11 +1007,17 @@
     $('persMode').addEventListener('change', resetSim);
     $('drugMode').addEventListener('change', function () { setDrugUI(this.value, true); }); // v1.4: смена класса АБ
     $('btnLawn').addEventListener('click', function () { E.lawn(st, 0, 1e7); render(); updateLegend(); logEvent('газон E. coli по всей чаше', 'man'); });
-    $('btnBolus').addEventListener('click', function () { E.bolusAB(st, doseVal()); render(); logEvent('болюс АБ ' + (doseVal() >= 10 ? doseVal().toFixed(0) : doseVal().toFixed(1)) + ' мг/л всю чашу', 'man'); });
+    $('btnBolus').addEventListener('click', function () { E.bolusAB(st, doseVal()); render(); logEvent('болюс АБ ' + (doseVal() >= 10 ? doseVal().toFixed(0) : doseVal().toFixed(1)) + '\u00a0мг/л всю чашу', 'man'); });
     $('btnTests').addEventListener('click', function () { runTests(); });
     $('micTick').textContent = 'MIC ' + E.SPECIES[0].MIC;
     $('mpcTick').textContent = 'MPC ' + E.SPECIES[0].MIC * E.MPC_FACTOR;
     setDrugUI('amox', false);
+    // Task 184: PD-профиль раскрывается (details) — перерисовать chart3 под фактическую ширину
+    // (у закрытого details clientWidth = 0, буфер собирался каноническим 960px);
+    // поворот экрана/ресайз — все канвы под новую ширину (при паузе loop их не перерисовывает)
+    const emaxBox = document.querySelector('.emaxbox');
+    if (emaxBox) emaxBox.addEventListener('toggle', function () { if (emaxBox.open) drawEmax(); });
+    window.addEventListener('resize', function () { drawCharts(); drawEmax(); });
 
     applyPreset(0);
     if (location.hash && location.hash.length > 1) applyFromHash(); // ссылка-сценарий из методички

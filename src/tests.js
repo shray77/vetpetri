@@ -194,7 +194,8 @@
     };
   }
 
-  // Т7. Экспорт CSV и hash-шаринг: buildCSV даёт заголовок+строки;
+  // Т7. Экспорт CSV и hash-шаринг: buildCSV даёт заголовок+строки; Task 184 — числа
+  //     с десятичной ЗАПЯТОЙ (RU-Excel при «;»-разделителе импортирует точку как текст);
   //     serializeParams∘parseParams — обратимая сериализация сценария.
   function testExportHash() {
     const hist = [
@@ -204,7 +205,8 @@
     const csv = E.buildCSV(hist);
     const lines = csv.split('\n');
     const csvOk = lines.length === 3 && lines[0].indexOf('t_h') === 0 &&
-      lines[0].indexOf('N_ecor') > 0 && lines[1].indexOf('1.00000e+6') > 0;
+      lines[0].indexOf('N_ecor') > 0 && lines[1].indexOf('1,00000e+6') > 0 &&
+      lines[1].indexOf('.') === -1; // запятая в числах, точки нет вовсе
     const params = { p: '2', seed: '777', dose: '18', kel: '1.0', pMut: '1e-6',
       S0: '1000', en: '1001', mu: '2.1,1.4,1,1.9', mic: '4,4,0.25,64', mode: 'infusion' };
     const rt = E.parseParams(E.serializeParams(params));
@@ -405,16 +407,19 @@
     };
   }
 
+  // Task 184: список тестов наружу — UI гоняет их чанками (по одному в свой setTimeout,
+  // без блокировки интерфейса); runAll — прежний синхронный прогон для node CLI.
+  const TESTS = [testGrowth, testTimeKill, testSeed, testSelectionWindow, testInfusion, testMegaPlate, testExportHash, testChronicle, testPersisters,
+    testFQConcentrationDependence, testPAE, testPDIndices, testQ8hWindow];
+
   function runAll() {
-    const tests = [testGrowth, testTimeKill, testSeed, testSelectionWindow, testInfusion, testMegaPlate, testExportHash, testChronicle, testPersisters,
-      testFQConcentrationDependence, testPAE, testPDIndices, testQ8hWindow];
-    return tests.map(function (f) {
+    return TESTS.map(function (f) {
       try { return f(); }
       catch (e) { return { name: f.name, pass: false, details: 'ошибка: ' + e.message }; }
     });
   }
 
-  return { runAll: runAll };
+  return { runAll: runAll, tests: TESTS };
 });
 
 // CLI: node src/tests.js

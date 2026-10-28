@@ -184,7 +184,11 @@
     if (st.drug.kmax > 0) {
       for (let s = 0; s < species.length; s++) { species[s].kmax = st.drug.kmax; species[s].H = st.drug.H; }
     }
-    st.env.growthKillCoupling = st.drug.coupling;
+    // Task 184: cfg.env.growthKillCoupling — осознанный override конфига (раньше значение
+    // из класса АБ молча его перетирало); без явного boolean в cfg.env — связь «бьёт делящихся»
+    // из класса АБ, как прежде (проверять надо cfg.env, а не st.env — там уже мешанина дефолтов)
+    st.env.growthKillCoupling = (cfg.env && typeof cfg.env.growthKillCoupling === 'boolean')
+      ? cfg.env.growthKillCoupling : st.drug.coupling;
     // статические полосы АБ («мега-чаша», Baym 2016): доли диаметра чашки [f0..f1]
     if (cfg.abZones && cfg.abZones.length) {
       const mic0 = Math.max(0.01, species[0].MIC);
@@ -515,12 +519,15 @@
   }
 
   // ---------- экспорт данных и URL-hash (чистые функции, тестируются в node) ----------
+  // Task 184: RU-локаль Excel при «;»-разделителе импортирует «1.00000e+6» с ТОЧКОЙ как текст;
+  // десятичный разделитель в числах → запятая (на сам CSV-формат с «;» это не влияет)
+  function ruNum(s) { return String(s).replace('.', ','); }
   function buildCSV(history) {
     const names = ['eco', 'sdu', 'pmu', 'ecor'];
     const head = ['t_h', 'S_mg_l', 'A_mg_l'].concat(names.map(function (n) { return 'N_' + n; })).join(';');
     const rows = history.map(function (p) {
-      return [p.t.toFixed(2), p.S.toPrecision(6), p.A.toPrecision(6)]
-        .concat(p.tot.map(function (v) { return v.toExponential(5); })).join(';');
+      return [ruNum(p.t.toFixed(2)), ruNum(p.S.toPrecision(6)), ruNum(p.A.toPrecision(6))]
+        .concat(p.tot.map(function (v) { return ruNum(v.toExponential(5)); })).join(';');
     });
     return [head].concat(rows).join('\n');
   }
@@ -626,11 +633,11 @@
       if (pers > fl.persMax) fl.persMax = pers;
       if (!fl.persSurv && s.A > mic0 && pers > 50 && total < fl.peak / 10) {
         fl.persSurv = true;
-        out.push({ t: t, txt: 'персистеры пережили АБ — дормантный резервуар ≈ ' + pers.toExponential(1) + ' КОЕ', cls: 'pers' });
+        out.push({ t: t, txt: 'персистеры пережили АБ — дормантный резервуар ≈ ' + pers.toExponential(1) + '\u00a0КОЕ', cls: 'pers' });
       }
       if (fl.persSurv && !fl.persWake && s.A < mic0) {
         fl.persWake = true;
-        out.push({ t: t, txt: 'АБ упал — персистеры выходят из дорманта (1/b ≈ ' + (1 / st.env.persB).toFixed(0) + ' ч)', cls: 'pers' });
+        out.push({ t: t, txt: 'АБ упал — персистеры выходят из дорманта (1/b ≈ ' + (1 / st.env.persB).toFixed(0) + '\u00a0ч)', cls: 'pers' });
       }
     }
     // мутанты: родились сами (r0 < 1 — R не сеяли) и вытеснили wt
