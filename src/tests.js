@@ -375,9 +375,39 @@
     };
   }
 
+  // Т13. q8h-окно (Task 183): «одна суточная доза» — внесения только в 0/8/16 ч
+  //      (первое — initDose, два долива в step); после 24 ч доливов НЕТ.
+  //      Маркер — Amax (максимум по чашке): не зависит от знаменателя area (среднее A
+  //      «плывёт» при съедании субстрата — бактерии обнуляют S, area сжимается).
+  //      Между болюсами Amax монотонно затухает по kel; скачок вверх = долив.
+  function testQ8hWindow() {
+    const st = mk({ seed: 5, enabled: [true, false, false, false],
+      dosing: { mode: 'q8h', dose: 24 }, env: { noise: 0, kel: 0.69 } });
+    E.lawn(st, 0, 1e6);
+    E.initDose(st); // внесение №1 (t = 0)
+    const rises = [];
+    let prevA = E.stats(st).Amax;
+    while (st.t < 30) {
+      E.step(st, 0.05);
+      const a = E.stats(st).Amax;
+      if (a > prevA * 1.5 + 0.01) rises.push(st.t);
+      prevA = a;
+    }
+    const inWindow = rises.filter(function (t) { return t < 24.001; });
+    const after24 = rises.filter(function (t) { return t >= 24.001; });
+    const ok = inWindow.length === 2 && after24.length === 0; // t=8 и t=16; в 24 ч — тишина
+    return {
+      name: 'q8h: ровно 3 внесения за сутки (0/8/16 ч), после 24 ч доливов нет',
+      pass: ok,
+      details: 'доза 24 мг/л, t½ 1 ч; скачки Amax в ' +
+        (rises.length ? rises.map(function (t) { return t.toFixed(1); }).join(', ') : '—') +
+        ' ч (внесение t=0 — initDose); после 24 ч: ' + after24.length + ' скачков',
+    };
+  }
+
   function runAll() {
     const tests = [testGrowth, testTimeKill, testSeed, testSelectionWindow, testInfusion, testMegaPlate, testExportHash, testChronicle, testPersisters,
-      testFQConcentrationDependence, testPAE, testPDIndices];
+      testFQConcentrationDependence, testPAE, testPDIndices, testQ8hWindow];
     return tests.map(function (f) {
       try { return f(); }
       catch (e) { return { name: f.name, pass: false, details: 'ошибка: ' + e.message }; }

@@ -283,7 +283,6 @@
     const y0 = Math.max(0, Math.floor(y - r)), y1 = Math.min(st.H - 1, Math.ceil(y + r));
     for (let yy = y0; yy <= y1; yy++) for (let xx = x0; xx <= x1; xx++) {
       const i = yy * st.W + xx;
-      if (!st.S[i] && st.A[i] === 0) { /* вне чашки не держим */ }
       const d2 = (xx - x) * (xx - x) + (yy - y) * (yy - y);
       if (d2 > r2) continue;
       st.A[i] = Math.max(st.A[i], peak * Math.exp(-d2 / (r2 / 2)));
@@ -342,7 +341,9 @@
         for (let x = 0; x < W; x++) st.A[row + x] = st.mask[row + x] ? zc[x] : 0;
       }
     } else {
-      if (st.dosing.mode === 'q8h' && st.t + 1e-6 >= st._nextDoseT) {
+      // Task 183: окно q8h — СУТКИ: внесения в 0 ч (initDose) + доливы в 8 и 16 ч,
+      // после 24 ч доливов нет — «одна суточная доза», как заявлено в UI/README
+      if (st.dosing.mode === 'q8h' && st.t + 1e-6 >= st._nextDoseT && st._nextDoseT < 24) {
         bolusAB(st, st.dosing.dose / 3); // та же суточная доза, но тремя болюсами
         st._nextDoseT += 8;
       }

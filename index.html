@@ -1553,7 +1553,8 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--tx);
 .muted { color: var(--mut); font-weight: 400; text-transform: none; letter-spacing: 0; }
 
 .dish-wrap { position: relative; background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
-#dish { display: block; width: 100%; height: auto; cursor: crosshair; }
+/* Task 183: тач — драг по чаше (посев/капля/ластик) не должен отдаваться скроллу страницы */
+#dish { display: block; width: 100%; height: auto; cursor: crosshair; touch-action: none; }
 .hint { position: absolute; left: 10px; top: 8px; font-size: 12px; color: var(--mut);
   background: color-mix(in srgb, var(--bg) 65%, transparent); padding: 3px 10px; border-radius: 10px; pointer-events: none; }
 
@@ -1759,7 +1760,7 @@ body.projector #layerBar .tool { font-size: 15px; }
 <main class="wrap">
   <section class="stage">
     <div class="dish-wrap">
-      <canvas id="dish" width="960" height="600"></canvas>
+      <canvas id="dish" width="960" height="600" role="img" aria-label="Чаша Петри: колонии бактерий в цветах видов, фиолетовая вуаль — антибиотик; подробности — в легенде под графиками и хронике событий"></canvas>
       <div id="hint" class="hint">Пресет «Кривая роста» — жми «пуск». Инструменты: посев / капля АБ / стереть.</div>
       <div id="probe" class="probe"></div>
     </div>
@@ -1786,9 +1787,9 @@ body.projector #layerBar .tool { font-size: 15px; }
 
     <div class="tools">
       <span class="tb-label">Инструмент:</span>
-      <div id="toolSeed" class="tool active">Посев: <b id="toolSeedName">E. coli</b></div>
-      <div id="toolDrop" class="tool">Капля антибиотика</div>
-      <div id="toolWipe" class="tool">Стереть</div>
+      <div id="toolSeed" class="tool active" role="button" tabindex="0">Посев: <b id="toolSeedName">E. coli</b></div>
+      <div id="toolDrop" class="tool" role="button" tabindex="0">Капля антибиотика</div>
+      <div id="toolWipe" class="tool" role="button" tabindex="0">Стереть</div>
       <span class="tb-sep"></span>
       <button id="btnLawn" class="btn sm">Газон E. coli</button>
       <button id="btnBolus" class="btn sm">Болюс АБ всю чашу</button>
@@ -1796,10 +1797,10 @@ body.projector #layerBar .tool { font-size: 15px; }
 
     <div class="tools" id="layerBar">
       <span class="tb-label">Слой чаши:</span>
-      <div class="tool active" data-layer="biomass">Клетки</div>
-      <div class="tool" data-layer="S">Субстрат</div>
-      <div class="tool" data-layer="A">Антибиотик</div>
-      <div class="tool" data-layer="mu">Рост μ</div>
+      <div class="tool active" data-layer="biomass" role="button" tabindex="0">Клетки</div>
+      <div class="tool" data-layer="S" role="button" tabindex="0">Субстрат</div>
+      <div class="tool" data-layer="A" role="button" tabindex="0">Антибиотик</div>
+      <div class="tool" data-layer="mu" role="button" tabindex="0">Рост μ</div>
     </div>
 
     <div class="charts">
@@ -1819,7 +1820,7 @@ body.projector #layerBar .tool { font-size: 15px; }
 
     <div class="chron">
       <div class="chron-cap"><b>Хроника событий</b> <span class="muted">— что случилось и когда: лаг/экспонента, субстрат, АБ vs MIC, рождение мутантов, персистеры, ручные действия</span></div>
-      <div id="chronList" class="chron-list"></div>
+      <div id="chronList" class="chron-list" aria-live="polite"></div>
     </div>
   </section>
 
@@ -2203,7 +2204,6 @@ body.projector #layerBar .tool { font-size: 15px; }
     const y0 = Math.max(0, Math.floor(y - r)), y1 = Math.min(st.H - 1, Math.ceil(y + r));
     for (let yy = y0; yy <= y1; yy++) for (let xx = x0; xx <= x1; xx++) {
       const i = yy * st.W + xx;
-      if (!st.S[i] && st.A[i] === 0) { /* вне чашки не держим */ }
       const d2 = (xx - x) * (xx - x) + (yy - y) * (yy - y);
       if (d2 > r2) continue;
       st.A[i] = Math.max(st.A[i], peak * Math.exp(-d2 / (r2 / 2)));
@@ -2262,7 +2262,9 @@ body.projector #layerBar .tool { font-size: 15px; }
         for (let x = 0; x < W; x++) st.A[row + x] = st.mask[row + x] ? zc[x] : 0;
       }
     } else {
-      if (st.dosing.mode === 'q8h' && st.t + 1e-6 >= st._nextDoseT) {
+      // Task 183: окно q8h — СУТКИ: внесения в 0 ч (initDose) + доливы в 8 и 16 ч,
+      // после 24 ч доливов нет — «одна суточная доза», как заявлено в UI/README
+      if (st.dosing.mode === 'q8h' && st.t + 1e-6 >= st._nextDoseT && st._nextDoseT < 24) {
         bolusAB(st, st.dosing.dose / 3); // та же суточная доза, но тремя болюсами
         st._nextDoseT += 8;
       }
@@ -2996,9 +2998,39 @@ body.projector #layerBar .tool { font-size: 15px; }
     };
   }
 
+  // Т13. q8h-окно (Task 183): «одна суточная доза» — внесения только в 0/8/16 ч
+  //      (первое — initDose, два долива в step); после 24 ч доливов НЕТ.
+  //      Маркер — Amax (максимум по чашке): не зависит от знаменателя area (среднее A
+  //      «плывёт» при съедании субстрата — бактерии обнуляют S, area сжимается).
+  //      Между болюсами Amax монотонно затухает по kel; скачок вверх = долив.
+  function testQ8hWindow() {
+    const st = mk({ seed: 5, enabled: [true, false, false, false],
+      dosing: { mode: 'q8h', dose: 24 }, env: { noise: 0, kel: 0.69 } });
+    E.lawn(st, 0, 1e6);
+    E.initDose(st); // внесение №1 (t = 0)
+    const rises = [];
+    let prevA = E.stats(st).Amax;
+    while (st.t < 30) {
+      E.step(st, 0.05);
+      const a = E.stats(st).Amax;
+      if (a > prevA * 1.5 + 0.01) rises.push(st.t);
+      prevA = a;
+    }
+    const inWindow = rises.filter(function (t) { return t < 24.001; });
+    const after24 = rises.filter(function (t) { return t >= 24.001; });
+    const ok = inWindow.length === 2 && after24.length === 0; // t=8 и t=16; в 24 ч — тишина
+    return {
+      name: 'q8h: ровно 3 внесения за сутки (0/8/16 ч), после 24 ч доливов нет',
+      pass: ok,
+      details: 'доза 24 мг/л, t½ 1 ч; скачки Amax в ' +
+        (rises.length ? rises.map(function (t) { return t.toFixed(1); }).join(', ') : '—') +
+        ' ч (внесение t=0 — initDose); после 24 ч: ' + after24.length + ' скачков',
+    };
+  }
+
   function runAll() {
     const tests = [testGrowth, testTimeKill, testSeed, testSelectionWindow, testInfusion, testMegaPlate, testExportHash, testChronicle, testPersisters,
-      testFQConcentrationDependence, testPAE, testPDIndices];
+      testFQConcentrationDependence, testPAE, testPDIndices, testQ8hWindow];
     return tests.map(function (f) {
       try { return f(); }
       catch (e) { return { name: f.name, pass: false, details: 'ошибка: ' + e.message }; }
@@ -3666,6 +3698,7 @@ body.projector #layerBar .tool { font-size: 15px; }
       const c50 = E.c50Of(sp, st.env);
       const c50H = Math.pow(c50, sp.H); // v1.4-фикс: знаменатель Хилла A^H + C50^H (как в калибровке)
       const coup = st.env.growthKillCoupling; // β-лактам бьёт делящихся; фторхинолон — всех
+      const kd0 = sp.kd;
       function curve(sat, style, color, wd) {
         c3.strokeStyle = color; c3.lineWidth = wd; c3.setLineDash(style); c3.beginPath();
         for (let k = 0; k <= 160; k++) {
@@ -3679,7 +3712,6 @@ body.projector #layerBar .tool { font-size: 15px; }
         }
         c3.stroke(); c3.setLineDash([]);
       }
-      const kd0 = sp.kd;
       curve(1, [], sp.css, 1.8);                        // сытая зона (net=0 при A=MIC)
       if (s === 0 && coup) curve(0.05, [3, 3], 'rgba(125,146,173,.8)', 1.2); // голодная зона (wt, только β-лактам)
       c3.fillStyle = sp.css;
@@ -3693,10 +3725,10 @@ body.projector #layerBar .tool { font-size: 15px; }
     let html = '';
     E.SPECIES.forEach(function (sp, i) {
       html += '<div class="sp-row" id="sprow-' + i + '">' +
-        '<div class="sp-head" data-i="' + i + '">' +
+        '<div class="sp-head" data-i="' + i + '" role="button" tabindex="0" aria-expanded="false">' +
         '<input type="checkbox" id="sp-en-' + i + '"' + (i < 1 ? ' checked' : '') + '>' +
         '<span class="sw" style="width:11px;height:11px;border-radius:3px;background:' + sp.css + ';display:inline-block"></span>' +
-        '<span class="sp-name">' + sp.name + '</span>' +
+        '<label class="sp-name" for="sp-en-' + i + '">' + sp.name + '</label>' +
         '<span class="sp-count" id="sp-cnt-' + i + '">0</span></div>' +
         '<div class="sp-params">' +
         '<div class="kv"><label>\u03bcmax, ч\u207b\u00b9 (td ' + (Math.LN2 / sp.muMax * 60).toFixed(0) + ' мин)</label>' +
@@ -3708,9 +3740,16 @@ body.projector #layerBar .tool { font-size: 15px; }
     });
     box.innerHTML = html;
     E.SPECIES.forEach(function (_, i) {
-      $('sprow-' + i).querySelector('.sp-head').addEventListener('click', function (ev) {
-        if (ev.target.tagName === 'INPUT') return;
-        $('sprow-' + i).classList.toggle('open');
+      const head = $('sprow-' + i).querySelector('.sp-head');
+      head.addEventListener('click', function (ev) {
+        if (ev.target.tagName === 'INPUT' || ev.target.tagName === 'LABEL') return; // чекбокс и его label — не переключают панель
+        const row = $('sprow-' + i);
+        row.classList.toggle('open');
+        head.setAttribute('aria-expanded', row.classList.contains('open') ? 'true' : 'false');
+      });
+      // Task 183: клавиатура — шапка вида как кнопка (Enter/Space раскрывают параметры)
+      head.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); head.click(); }
       });
       $('sp-en-' + i).addEventListener('change', function () { toggleSpecies(i); });
       $('sp-mu-' + i).addEventListener('change', resetSim);
@@ -3733,7 +3772,7 @@ body.projector #layerBar .tool { font-size: 15px; }
         logEvent('вид включён — посеян: ' + st.species[i].name, 'man');
       }
     } else {
-      st.enabled[i] = false; // скрыть: из рендера/статистики, но клетки в чаше живут
+      st.enabled[i] = false; // скрыть: из рендера/статистики; динамика вида приостановлена (заморожена в N), клетки вернутся при включении
       if (row) row.classList.add('sp-off');
       logEvent('вид скрыт: ' + st.species[i].name, 'man');
     }
@@ -3781,13 +3820,16 @@ body.projector #layerBar .tool { font-size: 15px; }
           if ((xx - p.x) * (xx - p.x) + (yy - p.y) * (yy - p.y) > R * R) continue;
           for (let s = 0; s < 4; s++) st.N[s][yy * W + xx] = 0;
         }
-      logEvent('стерты колонии', 'man');
+      logEvent('стёрты колонии', 'man');
     }
     render(); updateLegend();
   }
   dish.addEventListener('pointerdown', function (ev) { dragging = true; applyTool(ev); });
   window.addEventListener('pointermove', function (ev) { if (dragging) applyTool(ev); });
   window.addEventListener('pointerup', function () { dragging = false; });
+  // Task 183: тач — обрыв указателя (скролл-перехват и пр.) не должен залипать драг:
+  // #dish { touch-action: none } не даёт браузеру забрать жест себе, pointercancel — страховка
+  dish.addEventListener('pointercancel', function () { dragging = false; });
 
   // ---------- probe-тултип: что под курсором ----------
   const probe = $('probe');
@@ -3914,6 +3956,12 @@ body.projector #layerBar .tool { font-size: 15px; }
   // ---------- инициализация ----------
   function init() {
     buildSpeciesPanel();
+    // Task 183: клавиатура — .tool (инструменты посева/капли/ластика и слои чаши) как кнопки
+    document.querySelectorAll('.tool').forEach(function (el) {
+      el.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); el.click(); }
+      });
+    });
     $('dose').value = 60; // 10^0.6 ≈ 4 мг/л = 1×MICwt
     updateDoseUI();
 

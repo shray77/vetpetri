@@ -39,7 +39,7 @@
 <main class="wrap">
   <section class="stage">
     <div class="dish-wrap">
-      <canvas id="dish" width="960" height="600"></canvas>
+      <canvas id="dish" width="960" height="600" role="img" aria-label="Чаша Петри: колонии бактерий в цветах видов, фиолетовая вуаль — антибиотик; подробности — в легенде под графиками и хронике событий"></canvas>
       <div id="hint" class="hint">Пресет «Кривая роста» — жми «пуск». Инструменты: посев / капля АБ / стереть.</div>
       <div id="probe" class="probe"></div>
     </div>
@@ -66,9 +66,9 @@
 
     <div class="tools">
       <span class="tb-label">Инструмент:</span>
-      <div id="toolSeed" class="tool active">Посев: <b id="toolSeedName">E. coli</b></div>
-      <div id="toolDrop" class="tool">Капля антибиотика</div>
-      <div id="toolWipe" class="tool">Стереть</div>
+      <div id="toolSeed" class="tool active" role="button" tabindex="0">Посев: <b id="toolSeedName">E. coli</b></div>
+      <div id="toolDrop" class="tool" role="button" tabindex="0">Капля антибиотика</div>
+      <div id="toolWipe" class="tool" role="button" tabindex="0">Стереть</div>
       <span class="tb-sep"></span>
       <button id="btnLawn" class="btn sm">Газон E. coli</button>
       <button id="btnBolus" class="btn sm">Болюс АБ всю чашу</button>
@@ -76,10 +76,10 @@
 
     <div class="tools" id="layerBar">
       <span class="tb-label">Слой чаши:</span>
-      <div class="tool active" data-layer="biomass">Клетки</div>
-      <div class="tool" data-layer="S">Субстрат</div>
-      <div class="tool" data-layer="A">Антибиотик</div>
-      <div class="tool" data-layer="mu">Рост μ</div>
+      <div class="tool active" data-layer="biomass" role="button" tabindex="0">Клетки</div>
+      <div class="tool" data-layer="S" role="button" tabindex="0">Субстрат</div>
+      <div class="tool" data-layer="A" role="button" tabindex="0">Антибиотик</div>
+      <div class="tool" data-layer="mu" role="button" tabindex="0">Рост μ</div>
     </div>
 
     <div class="charts">
@@ -99,7 +99,7 @@
 
     <div class="chron">
       <div class="chron-cap"><b>Хроника событий</b> <span class="muted">— что случилось и когда: лаг/экспонента, субстрат, АБ vs MIC, рождение мутантов, персистеры, ручные действия</span></div>
-      <div id="chronList" class="chron-list"></div>
+      <div id="chronList" class="chron-list" aria-live="polite"></div>
     </div>
   </section>
 

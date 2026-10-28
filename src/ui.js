@@ -653,6 +653,7 @@
       const c50 = E.c50Of(sp, st.env);
       const c50H = Math.pow(c50, sp.H); // v1.4-фикс: знаменатель Хилла A^H + C50^H (как в калибровке)
       const coup = st.env.growthKillCoupling; // β-лактам бьёт делящихся; фторхинолон — всех
+      const kd0 = sp.kd;
       function curve(sat, style, color, wd) {
         c3.strokeStyle = color; c3.lineWidth = wd; c3.setLineDash(style); c3.beginPath();
         for (let k = 0; k <= 160; k++) {
@@ -666,7 +667,6 @@
         }
         c3.stroke(); c3.setLineDash([]);
       }
-      const kd0 = sp.kd;
       curve(1, [], sp.css, 1.8);                        // сытая зона (net=0 при A=MIC)
       if (s === 0 && coup) curve(0.05, [3, 3], 'rgba(125,146,173,.8)', 1.2); // голодная зона (wt, только β-лактам)
       c3.fillStyle = sp.css;
@@ -680,10 +680,10 @@
     let html = '';
     E.SPECIES.forEach(function (sp, i) {
       html += '<div class="sp-row" id="sprow-' + i + '">' +
-        '<div class="sp-head" data-i="' + i + '">' +
+        '<div class="sp-head" data-i="' + i + '" role="button" tabindex="0" aria-expanded="false">' +
         '<input type="checkbox" id="sp-en-' + i + '"' + (i < 1 ? ' checked' : '') + '>' +
         '<span class="sw" style="width:11px;height:11px;border-radius:3px;background:' + sp.css + ';display:inline-block"></span>' +
-        '<span class="sp-name">' + sp.name + '</span>' +
+        '<label class="sp-name" for="sp-en-' + i + '">' + sp.name + '</label>' +
         '<span class="sp-count" id="sp-cnt-' + i + '">0</span></div>' +
         '<div class="sp-params">' +
         '<div class="kv"><label>\u03bcmax, ч\u207b\u00b9 (td ' + (Math.LN2 / sp.muMax * 60).toFixed(0) + ' мин)</label>' +
@@ -695,9 +695,16 @@
     });
     box.innerHTML = html;
     E.SPECIES.forEach(function (_, i) {
-      $('sprow-' + i).querySelector('.sp-head').addEventListener('click', function (ev) {
-        if (ev.target.tagName === 'INPUT') return;
-        $('sprow-' + i).classList.toggle('open');
+      const head = $('sprow-' + i).querySelector('.sp-head');
+      head.addEventListener('click', function (ev) {
+        if (ev.target.tagName === 'INPUT' || ev.target.tagName === 'LABEL') return; // чекбокс и его label — не переключают панель
+        const row = $('sprow-' + i);
+        row.classList.toggle('open');
+        head.setAttribute('aria-expanded', row.classList.contains('open') ? 'true' : 'false');
+      });
+      // Task 183: клавиатура — шапка вида как кнопка (Enter/Space раскрывают параметры)
+      head.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); head.click(); }
       });
       $('sp-en-' + i).addEventListener('change', function () { toggleSpecies(i); });
       $('sp-mu-' + i).addEventListener('change', resetSim);
@@ -720,7 +727,7 @@
         logEvent('вид включён — посеян: ' + st.species[i].name, 'man');
       }
     } else {
-      st.enabled[i] = false; // скрыть: из рендера/статистики, но клетки в чаше живут
+      st.enabled[i] = false; // скрыть: из рендера/статистики; динамика вида приостановлена (заморожена в N), клетки вернутся при включении
       if (row) row.classList.add('sp-off');
       logEvent('вид скрыт: ' + st.species[i].name, 'man');
     }
@@ -768,13 +775,16 @@
           if ((xx - p.x) * (xx - p.x) + (yy - p.y) * (yy - p.y) > R * R) continue;
           for (let s = 0; s < 4; s++) st.N[s][yy * W + xx] = 0;
         }
-      logEvent('стерты колонии', 'man');
+      logEvent('стёрты колонии', 'man');
     }
     render(); updateLegend();
   }
   dish.addEventListener('pointerdown', function (ev) { dragging = true; applyTool(ev); });
   window.addEventListener('pointermove', function (ev) { if (dragging) applyTool(ev); });
   window.addEventListener('pointerup', function () { dragging = false; });
+  // Task 183: тач — обрыв указателя (скролл-перехват и пр.) не должен залипать драг:
+  // #dish { touch-action: none } не даёт браузеру забрать жест себе, pointercancel — страховка
+  dish.addEventListener('pointercancel', function () { dragging = false; });
 
   // ---------- probe-тултип: что под курсором ----------
   const probe = $('probe');
@@ -901,6 +911,12 @@
   // ---------- инициализация ----------
   function init() {
     buildSpeciesPanel();
+    // Task 183: клавиатура — .tool (инструменты посева/капли/ластика и слои чаши) как кнопки
+    document.querySelectorAll('.tool').forEach(function (el) {
+      el.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); el.click(); }
+      });
+    });
     $('dose').value = 60; // 10^0.6 ≈ 4 мг/л = 1×MICwt
     updateDoseUI();
 
