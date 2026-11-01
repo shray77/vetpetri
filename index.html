@@ -2210,19 +2210,19 @@ body.projector #layerBar .tool { font-size: 15px; }
     <details class="box">
       <summary>Источники параметров</summary>
       <ol class="src">
-        <li><b>Моно</b>: Monod J. (1949) The growth of bacterial cultures. <i>Annu Rev Microbiol</i> 3:371 — μmax, Ks (глюкоза, E. coli: 2–6 мг/л); Ks/ml30 = 53.4 мкг/л (BioNumbers 111051); обзор значений: Kovárová-Kovar &amp; Egli (1998) <i>Microbiol Mol Biol Rev</i>.</li>
+        <li><b>Моно</b>: Monod J. (1949) The growth of bacterial cultures. <i>Annu Rev Microbiol</i> 3:371 — форма μ(S). Ks = 4 мг/л здесь — дидактическая калибровка: хемостатный Ks глюкозы E. coli ≈ 0.03 мг/л — Senn H. et al. (1996) <i>J Bacteriol</i> 178:4530; обзор значений: Kovárová-Kovar &amp; Egli (1998) <i>Microbiol Mol Biol Rev</i>.</li>
         <li><b>Лаг-фаза</b>: Baranyi J., Roberts T.A. (1994) <i>Int J Food Microbiol</i> 23:277 — q-функция q/(1+q).</li>
-        <li><b>Time-kill, Хилл/Emax</b>: Regoes R.R. et al. (2004) <i>PLoS Biol</i> 2:e230; Nielsen E.I., Friberg L.E. (2006) <i>Antimicrob Agents Chemother</i> (semimechanistic PK/PD); Foerster S. et al. (2016) <i>BMC Microbiol</i> 16:167. β-лактамы: kmax ≈ 2–4 ч⁻¹, H ≈ 1–1.5 (порядок величины).</li>
+        <li><b>Time-kill, Хилл/Emax</b>: Regoes R.R. et al. (2004) <i>Antimicrob Agents Chemother</i> 48:3670; Nielsen E.I., Friberg L.E. (2013) <i>Pharmacol Rev</i> 65:1053 (semimechanistic PK/PD); Foerster S. et al. (2016) <i>BMC Microbiol</i> 16:167. β-лактамы: kmax ≈ 2–4 ч⁻¹, H ≈ 1–1.5 (порядок величины).</li>
         <li><b>MIC</b>: CLSI M100/VET01S, EUCAST — амоксициллин против E. coli WT: ECOFF ≤ 8 мг/л (здесь 4 — типичный WT); Pasteurella: S ≤ 0.5 (ампициллин, CLSI vet); Salmonella: прокси по ампициллину (S ≤ 8).</li>
-        <li><b>Окно селекции/MPC</b>: Drlica K., Zhao X. (2003) <i>J Antimicrob Chemother</i> 52:11; Drlica K. (2007) <i>Clin Infect Dis</i> 45:S129. MPC ≈ 4–8×MIC (для β-лактамов — оценка, взято 8×).</li>
+        <li><b>Окно селекции/MPC</b>: Drlica K. (2003) <i>J Antimicrob Chemother</i> 52:11; Drlica K., Zhao X. (2007) <i>Clin Infect Dis</i> 44:681. MPC ≈ 4–8×MIC (для β-лактамов — оценка, взято 8×).</li>
         <li><b>Мега-чаша (лестница доз)</b>: Baym M. et al. (2016) Spatiotemporal microbial evolution on antibiotic landscapes. <i>Science</i> 353:1147 — полосы 0→1→10→100 мкг/мл; видео и уроки: HHMI BioInteractive «Giant Petri Dish».</li>
         <li><b>fT&gt;MIC и режим введения</b>: Berry A.V. et al. (2022) Pharmacodynamic Thresholds for Beta-Lactam Antibiotics. <i>Clin Pharmacokinet</i> — цели fT&gt;MIC 40–70%; Tilanus A. et al. (2023) <i>J Antimicrob Chemother</i> 78:2165 — болюс vs пролонгированная инфузия.</li>
-        <li><b>PK амоксициллина у КРС</b>: Kreil V.E. et al. (2012) <i>Comp Immunol Microbiol Infect Dis</i> — t½ ≈ 0.86 ± 0.3 ч (натриевая соль, IM); здесь t½ = 1 ч.</li>
+        <li><b>PK t½ у животных</b>: амоксициллин — Kreil V.E. et al. (2012) <i>Small Ruminant Res</i> 102:208 — ЛАМЫ (Lama glama), t½ ≈ 0.86 ч, НЕ КРС (аудит SW-23: прежняя атрибуция «КРС» была ошибкой); t½ = 1 ч для КРС здесь — дидактическая калибровка. Энрофлоксацин КРС: Yang F. et al. (2025) <i>J Vet Pharmacol Ther</i> 48:30 (IV, t½ 3.6 ± 1.2 ч); Corum O. et al. (2026) <i>Vet Sci</i> 13:538 (телята, 2.5 ч).</li>
         <li><b>Цена резистентности</b>: β-лактамаза TEM-тип, MIC ≥ 64 мг/л; фитнес-цена −10% μmax (типичные оценки 1–15%).</li>
         <li><b>Персистеры</b>: Balaban N.Q. et al. (2004) Bacterial persistence as a phenotypic switch. <i>Science</i> 305:1622 —
           переключение нормальная↔дормантная клетки: WT a ≈ 1.2·10⁻⁶ ч⁻¹, b ≈ 0.1 ч⁻¹; hipQ a ≈ 10⁻³ ч⁻¹,
           b ≈ 10⁻⁶–10⁻⁴ ч⁻¹ (в статье «poorly determined», взята верхняя граница). Значения сведены в:
-          Kussell E., Leibler S. (2005) <i>Genetics</i> 169:1807. В модели — детерминированный компартмент без ГСЧ;
+          Kussell E., Kishony R., Balaban N.Q., Leibler S. (2005) <i>Genetics</i> 169:1807. В модели — детерминированный компартмент без ГСЧ;
           β-лактам на дормант не действует, субстрат он не потребляет.</li>
         <li><b>Открытые системы для углубления</b>: COMETS (github.com/COMETS-bio/COMETS) — пространственные метаболические модели; gro (github.com/runhel/gro); CellModeller. ВетПетри — их сильно упрощённый кубический родственник для пары.</li>
       </ol>
@@ -2252,7 +2252,8 @@ body.projector #layerBar .tool { font-size: 15px; }
  *   3) второй вид: та же динамика, общая ёмкость ячейки = эксплуатационная конкуренция
  *      (аналог Лотки–Вольтерры с общим ресурсом)
  *   4) антибиотик: диффузия + элиминация (kel), гибель по Хиллу/Emax (Regoes 2004 /
- *      Nielsen & Friberg 2006); C50 автокалибруется так, чтобы net-рост = 0 при A = MIC
+ *      Nielsen & Friberg 2013 — Pharmacol Rev 65:1053; год «2006» в ранних версиях был
+ *      ошибкой, см. аудит SW-23); C50 автокалибруется так, чтобы net-рост = 0 при A = MIC
  *      PK-режимы введения (одна суточная доза): болюс / 3 введения (q8h) / инфузия 24 ч
  *      — dose fractionation, цель для β-лактамов fT>MIC 40–70% (Berry 2022)
  *   4b) статические зоны АБ («мега-чаша», Baym 2016): полосы 0 → 1× → 10× → 100× MICwt
@@ -2284,21 +2285,24 @@ body.projector #layerBar .tool { font-size: 15px; }
   }
 
   // ---------- Виды (реальные вет. патогены, параметры — из литературы, см. README) ----------
-  // muMax: 1/ч (37 °C, богатая среда); Ks: мг/л (Monod 1949 / Kovárová-Kovar & Egli 1998);
+  // muMax: 1/ч (37 °C, богатая среда); Ks: мг/л — дидактическая калибровка (аудит SW-23:
+  // хемостатный Ks глюкозы E. coli ≈ 0.03 мг/л — Senn 1996, J Bacteriol 178:4530;
+  // при S0=1000 S/(Ks+S)=0.996 — член Моно насыщен, Ks на динамику не влияет);
   // MIC: мг/л амоксициллина (CLSI/EUCAST; у Salmonella — прокси по ампициллину);
   // MIC2: мг/л ЭНРОФЛОКСАЦИНА (v1.4 — второй класс АБ, фторхинолон; CLSI VET01/EUCAST:
   // E. coli S ≤ 0.25–0.5, ECOFF ~0.125 — берём консервативно 0.06–0.125;
   // P. multocida — очень чувствителен 0.03; β-лактамаза TEM на фторхинолоны НЕ действует —
   // другая мишень (ДНК-гираза), поэтому у ecor MIC2 = дикому)
   // kd: скорость отмирания при истощении субстрата (порядок 0.05–0.15 1/ч);
-  // kmax/H: фармакодинамика time-kill (Regoes 2004, Nielsen & Friberg 2006) — для
-  // фторхинолонов переопределяются классом АБ (DRUGS.enro: kmax 8, H 1.6).
+  // kmax/H: фармакодинамика time-kill (Regoes 2004, AAC 48:3670; Nielsen & Friberg 2013,
+  // Pharmacol Rev 65:1053) — для фторхинолонов переопределяются классом АБ (DRUGS.enro:
+  // kmax 8, H 1.6).
   const SPECIES_DEFAULTS = [
     {
       id: 'eco', name: 'E. coli', latin: 'Escherichia coli',
       host: 'телята, птица — колибактериоз',
       muMax: 2.1,   // td ≈ 20 мин (богатая среда, 37 °C)
-      Ks: 4,        // Monod 1949: Ks глюкозы 2–6 мг/л
+      Ks: 4,        // дидактическая калибровка: Senn 1996 даёт Ks глюкозы E. coli ≈ 0.03 мг/л (на два порядка ниже; при S0=1000 член Моно насыщен)
       MIC: 4,       // WT типично 2–8 мг/л (ECOFF ≤8)
       MIC2: 0.06,   // энрофлоксацин: чувствительный WT (S ≤ 0.25)
       kd: 0.08,
@@ -2350,8 +2354,11 @@ body.projector #layerBar .tool { font-size: 15px; }
   // (фторхинолоны 1–4 ч; β-лактамы на грамотрицательных ≈ 0 — честно ноль).
   // PD-индекс: амоксициллин — time-dependent, цель fT>MIC 40–70% (Berry 2022);
   // энрофлоксацин — concentration-dependent, цель AUC24/MIC ≥ 100–125 для
-  // грамотрицательных (McKellar & Preston 2004; VetCAST/сводка по фторхинолонам).
-  // kelHalf: типовой t½ у КРС (амоксициллин IM ≈ 1 ч, Kreil 2012; энрофлоксацин ≈ 3 ч).
+  // грамотрицательных (McKellar et al. 2004 — Sanchez Bruni и Jones, не «Preston»;
+  // исправлено по аудиту SW-23).
+  // kelHalf: типовой t½ у КРС (амоксициллин IM ≈ 1 ч — калибровка: Kreil 2012 оказался
+  // фармакокинетикой амоксициллина у ЛАМ, а не КРС — SW-23; энрофлоксацин ≈ 3 ч —
+  // Yang 2025, J Vet Pharmacol Ther 48:30, КРС IV 3.6±1.2 ч).
   const DRUGS = {
     amox: {
       id: 'amox', name: 'Амоксициллин', cls: 'β-лактам · time-dependent',
@@ -2372,7 +2379,7 @@ body.projector #layerBar .tool { font-size: 15px; }
     Nmax: 1e8,       // локальная ёмкость ячейки, КОЕ
     DS: 5.0,         // диффузия субстрата (эфф., усл.)
     DA: 3.5,         // диффузия антибиотика
-    kel: 0.69,       // элиминация АБ, 1/ч (t½ ≈ 1 ч, КРС IM — Kreil 2012: 0.86±0.3)
+    kel: 0.69,       // элиминация АБ, 1/ч (t½ ≈ 1 ч, КРС IM — калибровка: Kreil 2012 — ламы, не КРС, SW-23)
     pMut: 1e-6,      // мутаций на деление wt→R (ДЕМО: завышено для наглядности)
     recycle: 0.9,    // доля биомассы, возвращаемая лизисом в субстрат (криптический рост)
     noise: 0.12,     // демографический шум (амплитуда), RNG от seed
@@ -2380,7 +2387,8 @@ body.projector #layerBar .tool { font-size: 15px; }
     motility: 0.5,   // эффективная подвижность, ячейка²/ч — фронт колоний (Кольмогоров–Фишер)
     growthKillCoupling: true, // β-лактамы убивают делящиеся клетки
     // Персистеры (v1.3, Balaban 2004, Science 305:1622; значения a/b сведены в
-    // Kussell & Leibler 2005, Genetics 169:1807): дормантный компартмент n↔p.
+    // Kussell et al. 2005, Genetics 169:1807 — 4 автора: Kussell, Kishony, Balaban,
+    // Leibler): дормантный компартмент n↔p.
     // WT: a = 1.2e-6 1/ч, b = 0.1 1/ч; hipQ: a = 1e-3 1/ч, b = 1e-6…1e-4 (взято 1e-4,
     // в статье «poorly determined»). persA = 0 — слой ВЫКЛЮЧЕН (детерминированно,
     // без rng; хэши старых сценариев не меняются).
@@ -3217,7 +3225,7 @@ body.projector #layerBar .tool { font-size: 15px; }
     };
   }
 
-  // Т9. Персистеры (Balaban 2004, Science 305:1622; a/b — сводка Kussell & Leibler 2005):
+  // Т9. Персистеры (Balaban 2004, Science 305:1622; a/b — сводка Kussell et al. 2005):
   //      главный наблюдаемый фенотип — выживаемость после летального пульса АБ ∝ a
   //      (дормант не убивается β-лактамом): пол спада hipQ/wt ~1000×, пул ∝ a (разница ~833×);
   //      hipQ-резервуар восстанавливает популяцию после падения A<MIC; без слоя пул пуст.
@@ -3744,7 +3752,7 @@ body.projector #layerBar .tool { font-size: 15px; }
 
   // ---------- PK: бейдж PD-индекса (v1.4 — по классу АБ) ----------
   // амоксициллин: T>MIC — доля первых суток выше MICwt, цель 40–70% (Berry 2022);
-  // энрофлоксацин: AUC24/MIC (цель ≥ 100–125, McKellar & Preston 2004) + Cmax/MIC (≥ 8–10).
+  // энрофлоксацин: AUC24/MIC (цель ≥ 100–125, McKellar et al. 2004) + Cmax/MIC (≥ 8–10).
   // Task 184: оба индекса — из одного E.pdIndices (унификация методик: раньше амоксициллин
   // считался поточечно, энро — интерполяцией пересечений порога).
   function updatePKBadge() {
