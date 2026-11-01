@@ -183,13 +183,17 @@
     }
     const seeds = [42, 43, 44];
     const runs = seeds.map(run);
-    const ok = runs.every(function (r) { return r.crossT !== null && r.crossT <= 36 && r.wtHi < 100; });
+    // Task 223 (якорь обновлён): отражающая стенка — субстрат/клетки больше не исчезают
+    // за краем блюдца, и у границы 100×-полосы держится след wt ~200 КОЕ на ~150 ячеек
+    // зоны (транзит гибнущих клеток из 10×, kill ≈ 3 1/ч; было ~4 при поглощающем крае).
+    // Порог 1000 КОЕ = 0.05% газона 2е6 — колонизацией это не является ни в каком смысле.
+    const ok = runs.every(function (r) { return r.crossT !== null && r.crossT <= 36 && r.wtHi < 1000; });
     return {
-      name: 'Мега-чаша (Baym 2016): R прорывает 1×MIC за ≤36 ч; wt не берёт 10×MIC за 72 ч',
+      name: 'Мега-чаша (Baym 2016): R прорывает 1×MIC за ≤36 ч; wt не колонизирует 10×MIC за 72 ч',
       pass: ok,
       details: runs.map(function (r, i) {
         return 'seed ' + seeds[i] + ': R в зоне 10× на ' + (r.crossT === null ? '—' : r.crossT.toFixed(0) + ' ч') +
-          ', wt в зоне 100×: ' + r.wtHi.toFixed(0) + ' КОЕ';
+          ', след wt в зоне 100×: ' + r.wtHi.toFixed(0) + ' КОЕ';
       }).join('; '),
     };
   }
@@ -407,10 +411,36 @@
     };
   }
 
+  // Т14. Task 223 (аудит SW-23 §4/A6 + QA Б4): «стенка чашки» отражающая — масса не
+  //      теряется. 24 ч чистой диффузии (kel=0, инертный вид: μmax=kd=kmax=0 — только
+  //      перенос): ΣS, ΣA и ΣN по чашке сохраняются. До фикса край обнулялся ПОСЛЕ шага
+  //      и поглощал поток (−54% S / −46% A за сутки — «виртуальная элиминация» АБ у краёв).
+  function testWallMass() {
+    function sum(a) { let s = 0; for (let k = 0; k < a.length; k++) s += a[k]; return s; }
+    const st = mk({ W: 40, H: 24, seed: 3, wellMixed: false,
+      enabled: [true, false, false, false],
+      species: [Object.assign({}, E.SPECIES[0], { muMax: 0, kd: 0, kmax: 0 })].concat(E.SPECIES.slice(1)),
+      env: { noise: 0, kel: 0 } });
+    E.inoculate(st, 0, st.cx + st.R * 0.45, st.cy, 1e6, 3); // колония у стенки — подвижность в упор
+    E.dropAB(st, st.cx - st.R * 0.45, st.cy, 256, 3);       // капля АБ у другой стенки
+    st.S[Math.round(st.cy) * st.W + Math.round(st.cx)] += 4000; // пик субстрата в центре
+    const S0 = sum(st.S), A0 = sum(st.A), N0 = sum(st.N[0]);
+    while (st.t < 24) E.step(st, 0.05);
+    const S1 = sum(st.S), A1 = sum(st.A), N1 = sum(st.N[0]);
+    const rel = function (a, b) { return Math.abs(a - b) / b; };
+    const ok = rel(S1, S0) < 1e-3 && rel(A1, A0) < 1e-3 && rel(N1, N0) < 1e-3;
+    return {
+      name: 'Стенка чашки отражающая: за 24 ч диффузии масса S/A/клеток сохраняется',
+      pass: ok,
+      details: 'сохранение за 24 ч: S ' + (S1 / S0 * 100).toFixed(3) + '%, A ' + (A1 / A0 * 100).toFixed(3) +
+        '%, клетки ' + (N1 / N0 * 100).toFixed(3) + '% (до Task 223 край поглощал: −54% S / −46% A, SW-23 A6)',
+    };
+  }
+
   // Task 184: список тестов наружу — UI гоняет их чанками (по одному в свой setTimeout,
   // без блокировки интерфейса); runAll — прежний синхронный прогон для node CLI.
   const TESTS = [testGrowth, testTimeKill, testSeed, testSelectionWindow, testInfusion, testMegaPlate, testExportHash, testChronicle, testPersisters,
-    testFQConcentrationDependence, testPAE, testPDIndices, testQ8hWindow];
+    testFQConcentrationDependence, testPAE, testPDIndices, testQ8hWindow, testWallMass];
 
   function runAll() {
     return TESTS.map(function (f) {

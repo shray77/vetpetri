@@ -298,8 +298,14 @@
     for (let i = 0; i < st.n; i++) if (st.S[i] > 0 || st.A[i] > 0) st.A[i] = Math.max(st.A[i], dose);
   }
 
-  // ---------- Диффузия (явная схема, Нейман — без потока через край) ----------
-  function diffuse(arr, tmp, W, H, D, dt, sub) {
+  // ---------- Диффузия (явная схема; Нейман на краю сетки И на стенке чашки) ----------
+  // Task 223 (аудит SW-23 §4/A6, QA Б4): стенка чашки — ОТРАЖАЮЩАЯ (нулевого потока).
+  // Сосед вне mask (за краем блюдца) в лапласиане = сама ячейка → поток через стенку = 0,
+  // суммарная масса по чашке сохраняется точно (внутренние грани телескопируются).
+  // v1.4-«фикс» (обнуление вне mask ПОСЛЕ шага) давал ПОГЛОЩАЮЩИЙ край: за 24 ч чистой
+  // диффузии терялось 54% S / 46% A (kel=0) — «виртуальная элиминация» АБ у краёв,
+  // пресет 4 терял «поддерживаемую» концентрацию (8 → 3.2 мг/л к t=43 ч).
+  function diffuse(arr, tmp, W, H, D, dt, sub, mask) {
     const d = D * dt / sub;
     if (d * 4 > 0.45) throw new Error('diffusion unstable: ' + d);
     for (let s = 0; s < sub; s++) {
@@ -308,9 +314,14 @@
         const yn = y > 0 ? y - 1 : 0, yp = y < H - 1 ? y + 1 : H - 1;
         for (let x = 0; x < W; x++) {
           const i = y * W + x;
+          if (mask && !mask[i]) continue; // вне чашки — не обновляем (там 0 и остаётся 0)
           const xn = x > 0 ? x - 1 : 0, xp = x < W - 1 ? x + 1 : W - 1;
-          const lap = tmp[yn * W + x] + tmp[yp * W + x] + tmp[y * W + xn] + tmp[y * W + xp] - 4 * tmp[i];
-          arr[i] = tmp[i] + d * lap;
+          const c = tmp[i];
+          const up = mask && !mask[yn * W + x] ? c : tmp[yn * W + x];
+          const dn = mask && !mask[yp * W + x] ? c : tmp[yp * W + x];
+          const lf = mask && !mask[y * W + xn] ? c : tmp[y * W + xn];
+          const rt = mask && !mask[y * W + xp] ? c : tmp[y * W + xp];
+          arr[i] = c + d * (up + dn + lf + rt - 4 * c);
         }
       }
     }
@@ -324,15 +335,15 @@
     // 1) диффузия субстрата и антибиотика (в мега-чаше A статичен — диффузия/элиминация не нужны)
     if (!st._wellMixed) {
       const subS = Math.max(1, Math.ceil(env.DS * dt / 0.11));
-      diffuse(st.S, st._tmpS, W, H, env.DS, dt, subS);
+      diffuse(st.S, st._tmpS, W, H, env.DS, dt, subS, st.mask);
       if (!st.abZones) {
         const subA = Math.max(1, Math.ceil(env.DA * dt / 0.11));
-        diffuse(st.A, st._tmpA, W, H, env.DA, dt, subA);
+        diffuse(st.A, st._tmpA, W, H, env.DA, dt, subA, st.mask);
       }
-      // v1.4-фикс «стенка чашки»: Neumann-граница на краю БЛЮДЦА, а не сетки — S и A
-      // не диффундируют наружу (физика: стенка петри-диша). До фикса S растекался за
-      // край, раздувая area в stats() → среднее A разбавлялось (инфузия при 99 мг/л
-      // показывала T>MIC 0% вместо ~93%), а болюс «утекал» за край — PD-индексы врали.
+      // Task 223: сама отражающая стенка — в diffuse() (параметр mask). Обнуление вне
+      // чашки оставлено как гигиена: артефакты капель АБ за краем блюдца (dropAB mask
+      // не проверяет) не должны попадать в stats(). Массу внутри чашки оно не трогает —
+      // диффузия туда больше не пишет (раньше это и был поглощающий край, SW-23 A6).
       const m = st.mask;
       for (let i = 0; i < n; i++) if (!m[i]) { st.S[i] = 0; if (!st.abZones) st.A[i] = 0; }
     }
@@ -477,7 +488,7 @@
       if (dN * 4 > 0.45) throw new Error('motility unstable: ' + dN);
       for (let s = 0; s < st.species.length; s++) {
         if (!st.enabled[s]) continue;
-        diffuse(st.N[s], st._tmpS, W, H, env.motility, dt, 1);
+        diffuse(st.N[s], st._tmpS, W, H, env.motility, dt, 1, st.mask); // Task 223: стенка отражает и клетки
         const Ns = st.N[s];
         for (let i = 0; i < n; i++) if (!st.mask[i]) Ns[i] = 0; // не выходим за чашку
       }

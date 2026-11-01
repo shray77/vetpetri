@@ -2542,8 +2542,14 @@ body.projector #layerBar .tool { font-size: 15px; }
     for (let i = 0; i < st.n; i++) if (st.S[i] > 0 || st.A[i] > 0) st.A[i] = Math.max(st.A[i], dose);
   }
 
-  // ---------- Диффузия (явная схема, Нейман — без потока через край) ----------
-  function diffuse(arr, tmp, W, H, D, dt, sub) {
+  // ---------- Диффузия (явная схема; Нейман на краю сетки И на стенке чашки) ----------
+  // Task 223 (аудит SW-23 §4/A6, QA Б4): стенка чашки — ОТРАЖАЮЩАЯ (нулевого потока).
+  // Сосед вне mask (за краем блюдца) в лапласиане = сама ячейка → поток через стенку = 0,
+  // суммарная масса по чашке сохраняется точно (внутренние грани телескопируются).
+  // v1.4-«фикс» (обнуление вне mask ПОСЛЕ шага) давал ПОГЛОЩАЮЩИЙ край: за 24 ч чистой
+  // диффузии терялось 54% S / 46% A (kel=0) — «виртуальная элиминация» АБ у краёв,
+  // пресет 4 терял «поддерживаемую» концентрацию (8 → 3.2 мг/л к t=43 ч).
+  function diffuse(arr, tmp, W, H, D, dt, sub, mask) {
     const d = D * dt / sub;
     if (d * 4 > 0.45) throw new Error('diffusion unstable: ' + d);
     for (let s = 0; s < sub; s++) {
@@ -2552,9 +2558,14 @@ body.projector #layerBar .tool { font-size: 15px; }
         const yn = y > 0 ? y - 1 : 0, yp = y < H - 1 ? y + 1 : H - 1;
         for (let x = 0; x < W; x++) {
           const i = y * W + x;
+          if (mask && !mask[i]) continue; // вне чашки — не обновляем (там 0 и остаётся 0)
           const xn = x > 0 ? x - 1 : 0, xp = x < W - 1 ? x + 1 : W - 1;
-          const lap = tmp[yn * W + x] + tmp[yp * W + x] + tmp[y * W + xn] + tmp[y * W + xp] - 4 * tmp[i];
-          arr[i] = tmp[i] + d * lap;
+          const c = tmp[i];
+          const up = mask && !mask[yn * W + x] ? c : tmp[yn * W + x];
+          const dn = mask && !mask[yp * W + x] ? c : tmp[yp * W + x];
+          const lf = mask && !mask[y * W + xn] ? c : tmp[y * W + xn];
+          const rt = mask && !mask[y * W + xp] ? c : tmp[y * W + xp];
+          arr[i] = c + d * (up + dn + lf + rt - 4 * c);
         }
       }
     }
@@ -2568,15 +2579,15 @@ body.projector #layerBar .tool { font-size: 15px; }
     // 1) диффузия субстрата и антибиотика (в мега-чаше A статичен — диффузия/элиминация не нужны)
     if (!st._wellMixed) {
       const subS = Math.max(1, Math.ceil(env.DS * dt / 0.11));
-      diffuse(st.S, st._tmpS, W, H, env.DS, dt, subS);
+      diffuse(st.S, st._tmpS, W, H, env.DS, dt, subS, st.mask);
       if (!st.abZones) {
         const subA = Math.max(1, Math.ceil(env.DA * dt / 0.11));
-        diffuse(st.A, st._tmpA, W, H, env.DA, dt, subA);
+        diffuse(st.A, st._tmpA, W, H, env.DA, dt, subA, st.mask);
       }
-      // v1.4-фикс «стенка чашки»: Neumann-граница на краю БЛЮДЦА, а не сетки — S и A
-      // не диффундируют наружу (физика: стенка петри-диша). До фикса S растекался за
-      // край, раздувая area в stats() → среднее A разбавлялось (инфузия при 99 мг/л
-      // показывала T>MIC 0% вместо ~93%), а болюс «утекал» за край — PD-индексы врали.
+      // Task 223: сама отражающая стенка — в diffuse() (параметр mask). Обнуление вне
+      // чашки оставлено как гигиена: артефакты капель АБ за краем блюдца (dropAB mask
+      // не проверяет) не должны попадать в stats(). Массу внутри чашки оно не трогает —
+      // диффузия туда больше не пишет (раньше это и был поглощающий край, SW-23 A6).
       const m = st.mask;
       for (let i = 0; i < n; i++) if (!m[i]) { st.S[i] = 0; if (!st.abZones) st.A[i] = 0; }
     }
@@ -2721,7 +2732,7 @@ body.projector #layerBar .tool { font-size: 15px; }
       if (dN * 4 > 0.45) throw new Error('motility unstable: ' + dN);
       for (let s = 0; s < st.species.length; s++) {
         if (!st.enabled[s]) continue;
-        diffuse(st.N[s], st._tmpS, W, H, env.motility, dt, 1);
+        diffuse(st.N[s], st._tmpS, W, H, env.motility, dt, 1, st.mask); // Task 223: стенка отражает и клетки
         const Ns = st.N[s];
         for (let i = 0; i < n; i++) if (!st.mask[i]) Ns[i] = 0; // не выходим за чашку
       }
@@ -3136,13 +3147,17 @@ body.projector #layerBar .tool { font-size: 15px; }
     }
     const seeds = [42, 43, 44];
     const runs = seeds.map(run);
-    const ok = runs.every(function (r) { return r.crossT !== null && r.crossT <= 36 && r.wtHi < 100; });
+    // Task 223 (якорь обновлён): отражающая стенка — субстрат/клетки больше не исчезают
+    // за краем блюдца, и у границы 100×-полосы держится след wt ~200 КОЕ на ~150 ячеек
+    // зоны (транзит гибнущих клеток из 10×, kill ≈ 3 1/ч; было ~4 при поглощающем крае).
+    // Порог 1000 КОЕ = 0.05% газона 2е6 — колонизацией это не является ни в каком смысле.
+    const ok = runs.every(function (r) { return r.crossT !== null && r.crossT <= 36 && r.wtHi < 1000; });
     return {
-      name: 'Мега-чаша (Baym 2016): R прорывает 1×MIC за ≤36 ч; wt не берёт 10×MIC за 72 ч',
+      name: 'Мега-чаша (Baym 2016): R прорывает 1×MIC за ≤36 ч; wt не колонизирует 10×MIC за 72 ч',
       pass: ok,
       details: runs.map(function (r, i) {
         return 'seed ' + seeds[i] + ': R в зоне 10× на ' + (r.crossT === null ? '—' : r.crossT.toFixed(0) + ' ч') +
-          ', wt в зоне 100×: ' + r.wtHi.toFixed(0) + ' КОЕ';
+          ', след wt в зоне 100×: ' + r.wtHi.toFixed(0) + ' КОЕ';
       }).join('; '),
     };
   }
@@ -3360,10 +3375,36 @@ body.projector #layerBar .tool { font-size: 15px; }
     };
   }
 
+  // Т14. Task 223 (аудит SW-23 §4/A6 + QA Б4): «стенка чашки» отражающая — масса не
+  //      теряется. 24 ч чистой диффузии (kel=0, инертный вид: μmax=kd=kmax=0 — только
+  //      перенос): ΣS, ΣA и ΣN по чашке сохраняются. До фикса край обнулялся ПОСЛЕ шага
+  //      и поглощал поток (−54% S / −46% A за сутки — «виртуальная элиминация» АБ у краёв).
+  function testWallMass() {
+    function sum(a) { let s = 0; for (let k = 0; k < a.length; k++) s += a[k]; return s; }
+    const st = mk({ W: 40, H: 24, seed: 3, wellMixed: false,
+      enabled: [true, false, false, false],
+      species: [Object.assign({}, E.SPECIES[0], { muMax: 0, kd: 0, kmax: 0 })].concat(E.SPECIES.slice(1)),
+      env: { noise: 0, kel: 0 } });
+    E.inoculate(st, 0, st.cx + st.R * 0.45, st.cy, 1e6, 3); // колония у стенки — подвижность в упор
+    E.dropAB(st, st.cx - st.R * 0.45, st.cy, 256, 3);       // капля АБ у другой стенки
+    st.S[Math.round(st.cy) * st.W + Math.round(st.cx)] += 4000; // пик субстрата в центре
+    const S0 = sum(st.S), A0 = sum(st.A), N0 = sum(st.N[0]);
+    while (st.t < 24) E.step(st, 0.05);
+    const S1 = sum(st.S), A1 = sum(st.A), N1 = sum(st.N[0]);
+    const rel = function (a, b) { return Math.abs(a - b) / b; };
+    const ok = rel(S1, S0) < 1e-3 && rel(A1, A0) < 1e-3 && rel(N1, N0) < 1e-3;
+    return {
+      name: 'Стенка чашки отражающая: за 24 ч диффузии масса S/A/клеток сохраняется',
+      pass: ok,
+      details: 'сохранение за 24 ч: S ' + (S1 / S0 * 100).toFixed(3) + '%, A ' + (A1 / A0 * 100).toFixed(3) +
+        '%, клетки ' + (N1 / N0 * 100).toFixed(3) + '% (до Task 223 край поглощал: −54% S / −46% A, SW-23 A6)',
+    };
+  }
+
   // Task 184: список тестов наружу — UI гоняет их чанками (по одному в свой setTimeout,
   // без блокировки интерфейса); runAll — прежний синхронный прогон для node CLI.
   const TESTS = [testGrowth, testTimeKill, testSeed, testSelectionWindow, testInfusion, testMegaPlate, testExportHash, testChronicle, testPersisters,
-    testFQConcentrationDependence, testPAE, testPDIndices, testQ8hWindow];
+    testFQConcentrationDependence, testPAE, testPDIndices, testQ8hWindow, testWallMass];
 
   function runAll() {
     return TESTS.map(function (f) {
