@@ -39,6 +39,7 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--tx);
 /* Task 183: тач — драг по чаше (посев/капля/ластик) не должен отдаваться скроллу страницы */
 #dish { display: block; width: 100%; height: auto; cursor: crosshair; touch-action: none; }
 .hint { position: absolute; left: 10px; top: 8px; font-size: 12px; color: var(--mut);
+  background: rgba(11,15,20,.65); /* Task 223 (QA З3): фолбэк — color-mix ниже не поддержан в Chrome<111/Safari<16.2 */
   background: color-mix(in srgb, var(--bg) 65%, transparent); padding: 3px 10px; border-radius: 10px; pointer-events: none; }
 
 .toolbar, .tools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
@@ -54,6 +55,7 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--tx);
 .clock { font-variant-numeric: tabular-nums; color: var(--acc); font-size: 14px; margin-left: auto; }
 
 .tool { border: 1px solid var(--line); background: var(--panel2); border-radius: 8px; padding: 5px 12px; font-size: 13px; cursor: pointer; user-select: none; }
+.tool:hover { background: #21304c; } /* Task 223 (QA П3): тот же hover, что у .btn — консистентность тулбара */
 .tool.active { border-color: var(--acc); color: var(--acc); background: #10222a; }
 
 .charts { margin-top: 10px; background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: 8px; }
@@ -128,6 +130,7 @@ input[type=range] { width: 100%; accent-color: var(--violet); }
 
 /* ---------- v1.1: probe, PK-бейдж, лекционные сценарии, проектор ---------- */
 .probe { position: absolute; display: none; pointer-events: none; z-index: 5;
+  background: rgba(11,15,20,.93); /* Task 223 (QA З3): фолбэк до color-mix */
   background: color-mix(in srgb, var(--bg) 93%, transparent); border: 1px solid var(--line); border-radius: 8px;
   padding: 6px 9px; font-size: 12px; line-height: 1.5; white-space: nowrap; }
 .probe .sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 3px; }
@@ -148,7 +151,8 @@ details.lecture .la { color: var(--ok); }
 .chron-cap { font-size: 12px; color: var(--mut); margin-bottom: 4px; }
 .chron-cap b { color: var(--tx); }
 .chron-list { max-height: 150px; overflow-y: auto; font-size: 12.5px; }
-.chron-list .ev { padding: 2.5px 0; border-top: 1px dashed color-mix(in srgb, var(--line) 55%, transparent); }
+.chron-list .ev { padding: 2.5px 0; border-top: 1px dashed rgba(34,48,71,.55); /* Task 223 (QA З3): фолбэк до color-mix */
+  border-top: 1px dashed color-mix(in srgb, var(--line) 55%, transparent); }
 .chron-list .ev:first-child { border-top: none; }
 .chron-list .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
 .dot.gr { background: var(--ok); } .dot.ab { background: var(--violet); }

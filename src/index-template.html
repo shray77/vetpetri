@@ -7,6 +7,8 @@
 <meta name="description" content="Учебный симулятор чашки Петри с реальными ветеринарными патогенами: кинетика Моно, лаг-фаза по Бараньи, конкуренция видов, time-kill по Хиллу/Emax, окно селекции мутантов. Один HTML, без бэкенда.">
 <meta property="og:title" content="ВетПетри — симулятор чашки Петри">
 <meta property="og:description" content="Моно, Бараньи, Хилл/Emax, окно селекции мутантов — на реальных вет. патогенах. Для пары по микробиологии.">
+<!-- Task 223 (QA З1): инлайн-SVG-фавикон (тот же петри-диш, что в логотипе) — был единственный 404 в сети -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='9.2' fill='%230b0f14' stroke='%234dd0e1' stroke-width='1.6'/%3E%3Ccircle cx='9.5' cy='10' r='1.1' fill='%234dd0e1'/%3E%3Ccircle cx='14' cy='13.5' r='1.5' fill='%234dd0e1'/%3E%3Ccircle cx='11' cy='15.5' r='.8' fill='%234dd0e1'/%3E%3Ccircle cx='15.5' cy='8.5' r='.7' fill='%234dd0e1'/%3E%3C/svg%3E">
 <style>
 /*__CSS__*/
 </style>
@@ -15,14 +17,15 @@
 </head>
 <body>
 <nav class="ds-hub" aria-label="Экосистема">
-  <a href="https://shray77.github.io/">Визитка</a>
-  <a href="https://shray77.github.io/vetdigest-site/">Дайджест науки</a>
-  <a href="https://shray77.github.io/vetrecall-site/">Отзывы и вспышки РФ</a>
-  <a href="https://shray77.github.io/biothreat-site/">Биоугрозы мира</a>
-  <a href="https://shray77.github.io/vet-heatmap/">ВетКарта</a>
-  <a href="https://shray77.github.io/vetflu-site/">Окна риска ВПГП</a>
-  <a href="https://shray77.github.io/rss-core-site/">Статус ядра</a>
-  <a href="https://shray77.github.io/vetfecrt-site/">ФЭКРТ</a>
+  <!-- Task 223 (QA Ш4): target=_blank — клик по хабу больше не убивает текущий прогон -->
+  <a href="https://shray77.github.io/" target="_blank" rel="noopener">Визитка</a>
+  <a href="https://shray77.github.io/vetdigest-site/" target="_blank" rel="noopener">Дайджест науки</a>
+  <a href="https://shray77.github.io/vetrecall-site/" target="_blank" rel="noopener">Отзывы и вспышки РФ</a>
+  <a href="https://shray77.github.io/biothreat-site/" target="_blank" rel="noopener">Биоугрозы мира</a>
+  <a href="https://shray77.github.io/vet-heatmap/" target="_blank" rel="noopener">ВетКарта</a>
+  <a href="https://shray77.github.io/vetflu-site/" target="_blank" rel="noopener">Окна риска ВПГП</a>
+  <a href="https://shray77.github.io/rss-core-site/" target="_blank" rel="noopener">Статус ядра</a>
+  <a href="https://shray77.github.io/vetfecrt-site/" target="_blank" rel="noopener">ФЭКРТ</a>
 </nav>
 <header class="hdr">
   <div class="hdr-title">
@@ -158,7 +161,7 @@
     <div class="kv"><label>Seed (воспроизводимость)</label><span class="inline"><input id="seed" type="number" value="42" step="1"><button id="btnSeedRnd" class="btn sm">случайный</button></span></div>
 
     <details id="testsBox" class="box">
-      <summary>Тесты моделей (S-кривая · time-kill · seed · окно селекции · PK-инфузия · мега-чаша · экспорт · хроника · персистеры)</summary>
+      <summary>Тесты моделей (S-кривая · time-kill · seed · окно селекции · PK-инфузия · мега-чаша · экспорт · хроника · персистеры · q8h · стенка чашки)</summary>
       <button id="btnTests" class="btn">Прогнать заново</button>
       <div id="testsOut"></div>
     </details>

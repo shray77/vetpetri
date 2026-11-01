@@ -25,20 +25,35 @@
   let st = null, playing = false, speed = 8, tool = { kind: 'seed', sp: 0 };
   let layer = 'biomass'; // слой чаши (F10): biomass | S | A | mu
   let history = [], lastPush = -1, frameNo = 0, curPreset = 0;
+  let pdFrozen = null; // Task 223 (QA Б1): замороженные PD-индексы первых суток — день прошёл, значение иммутабельно
   let chron = [], chronFl = null, chronDirty = false; // хроника событий (v1.2)
 
   // ---------- параметры видов из UI ----------
   // Task 184 (урок Task 178: молчаливое «самоисправление» хуже явной ошибки): «0»/мусор/
   // отрицательное значение в μmax/MIC больше не подставляет видовой дефолт ТИХО —
   // валидация с честным сообщением в hint и возвратом поля к дефолту. Ks в UI не вводится.
-  function paramOrReject(inp, def, min, what, spName) {
+  // Task 223 (SW-23 A5 / QA Б2): верхняя граница тоже валидируется — μmax=1e9 раньше
+  // принимался молча (проверялась только нижняя) и уводил q Бараньи в Infinity →
+  // тихая NaN-смерть симуляции к t≈2 ч. Потолок 12 1/ч (td ≈ 3.5 мин) — рекомендация
+  // аудита SW-23; путь через hash (sp-mu-*.value) идёт в тот же валидатор.
+  // Task 223 (QA Ш1): успешный ввод СВОЕГО поля стирает СВОЮ же ошибку из hint — раньше
+  // сообщение переживало все последующие действия (а по ходу той же валидации его
+  // не должно стирать чужое поле — поэтому помним и поле, и текст).
+  let lastParamErr = null, lastParamErrInp = null;
+  function paramOrReject(inp, def, min, what, spName, max) {
     const raw = inp.value;
     const v = parseFloat(raw);
-    if (!isFinite(v) || v < min) {
-      if ($('hint')) $('hint').textContent = 'Параметр «' + what + '» (' + spName + '): «' + raw +
-        '» не годится — нужно число ≥ ' + min + '. Вернул ' + def + '.';
+    if (!isFinite(v) || v < min || (max !== undefined && v > max)) {
+      const msg = 'Параметр «' + what + '» (' + spName + '): «' + raw + '» не годится — нужно число ≥ ' + min +
+        (max !== undefined ? ' и ≤ ' + max : '') + '. Вернул ' + def + '.';
+      lastParamErr = msg; lastParamErrInp = inp;
+      if ($('hint')) $('hint').textContent = msg;
       inp.value = def;
       return def;
+    }
+    if (lastParamErrInp === inp && $('hint') && $('hint').textContent === lastParamErr) {
+      $('hint').textContent = ''; // ошибка этого поля исправлена — убираем (QA Ш1)
+      lastParamErr = null; lastParamErrInp = null;
     }
     return v;
   }
@@ -47,7 +62,7 @@
     for (let i = 0; i < E.SPECIES.length; i++) {
       const sp = E.SPECIES[i];
       list.push(Object.assign({}, sp, {
-        muMax: paramOrReject($('sp-mu-' + i), sp.muMax, 0.1, 'μmax', sp.name),
+        muMax: paramOrReject($('sp-mu-' + i), sp.muMax, 0.1, 'μmax', sp.name, 12),
         MIC: paramOrReject($('sp-mic-' + i), sp.MIC, 0.01, 'MIC', sp.name),
         enabled: $('sp-en-' + i).checked,
       }));
@@ -329,13 +344,20 @@
   function updatePKBadge() {
     const el = $('pkBadge');
     if (!el) return;
-    if ((curPreset !== 2 && curPreset !== 6) || !st || !history.length) { el.style.display = 'none'; return; }
+    // Task 223 (QA Б1): скрытие бейджа очищает и текст — в DOM оставался мусорный «98%»
+    if ((curPreset !== 2 && curPreset !== 6) || !st || !history.length) { el.style.display = 'none'; el.textContent = ''; return; }
     const mic = st.species[0].MIC;
+    // Task 223 (QA Б1): сутки прошли — индексы первых суток ЗАМОРАЖЕНЫ. Прореживание
+    // history (кап 2600, filter i%2===0) на длинных прогонах огрубляло первые 24 ч
+    // (точек в окне становилось < 2), и бейдж дрейфовал задним числом 23→27→«98%»
+    // с последующим исчезновением. Считаем ОДИН раз из полной истории — день прошёл,
+    // значение иммутабельно (эталон по движку для пресета 3 при 257 мг/л ≈ 25%).
+    if (pdFrozen === null && st.t > 24.0001) pdFrozen = E.pdIndices(history, mic);
+    const pi = pdFrozen || E.pdIndices(history, mic);
     const modeName = $('doseMode').value;
     const modeLabel = modeName === 'bolus' ? '1 болюс' : modeName === 'q8h' ? '3 введения' : 'инфузия';
     if (st.drugId === 'enro') {
-      const pi = E.pdIndices(history, mic);
-      if (!pi) { el.style.display = 'none'; return; }
+      if (!pi) { el.style.display = 'none'; el.textContent = ''; return; }
       el.style.display = '';
       const aucOk = pi.aucMic >= 100; // фторхинолоны: ≥ 100–125 для грамотрицательных
       el.textContent = 'AUC24/MIC: ' + pi.aucMic.toFixed(0) + ' [цель ≥ 125] · Cmax/MIC: ' +
@@ -344,8 +366,7 @@
     } else {
       // Task 184: T>MIC — как и AUC-бейдж выше, из E.pdIndices (линейные пересечения порога),
       // а не поточечный подсчёт доли записей истории
-      const pi = E.pdIndices(history, mic);
-      if (!pi) { el.style.display = 'none'; return; }
+      if (!pi) { el.style.display = 'none'; el.textContent = ''; return; }
       el.style.display = '';
       el.textContent = 'T>MIC (0–24\u00a0ч): ' + (pi.fTMIC * 100).toFixed(0) + '% [' + modeLabel +
         '] · цель для β-лактамов 40–70%';
@@ -365,7 +386,7 @@
   function resetSim() {
     st = buildState();
     PRESETS[curPreset].setup(st);
-    history = []; lastPush = -1;
+    history = []; lastPush = -1; pdFrozen = null;
     chron = []; chronFl = E.chronFlags(); chronDirty = false;
     playing = false; $('btnPlay').textContent = '\u25b6 Пуск';
     for (let i = 0; i < 4; i++) { const row = $('sprow-' + i); if (row) row.classList.toggle('sp-off', !st.enabled[i]); }
@@ -810,7 +831,7 @@
         }
       logEvent('стёрты колонии.', 'man');
     }
-    render(); updateLegend();
+    render(); updateLegend(); updateSpeciesCounts(); // Task 223 (QA Ш3): счётчики видов — сразу, не ждать 700-мс тика
   }
   dish.addEventListener('pointerdown', function (ev) { dragging = true; applyTool(ev); });
   window.addEventListener('pointermove', function (ev) { if (dragging) applyTool(ev); });
@@ -921,7 +942,7 @@
     location.hash = lastHashWritten.slice(1);
     const url = location.href;
     const done = function () {
-      $('hint').textContent = 'Ссылка со сценарием — в адресной строке; скопируй и передай студентам';
+      $('hint').textContent = 'Ссылка-сценарий — в адресной строке; скопируй и передай студентам';
     };
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, done);
     else done();
@@ -982,6 +1003,11 @@
     $('btnReset').addEventListener('click', resetSim);
     $('selSpeed').addEventListener('change', function () { speed = parseFloat(this.value); });
     $('dose').addEventListener('input', updateDoseUI);
+    // Task 223 (QA Ш2): в пресетах 3 и 7 доза кормит сам прогон (initDose при сбросе) —
+    // смена слайдера сбрасывает прогон, как kel/S0/pMut/seed/μmax/MIC: панель больше не
+    // «врёт» («показывает 257, а симулируется 4»). В песочнице (5) слайдер остаётся
+    // органом будущих действий (капля/болюс) — сброс убил бы прогон посреди игры.
+    $('dose').addEventListener('change', function () { if (curPreset === 2 || curPreset === 6) resetSim(); });
     $('doseMode').addEventListener('change', resetSim);
     $('kel').addEventListener('change', resetSim);
     $('S0').addEventListener('change', resetSim);
@@ -1006,7 +1032,7 @@
     });
     $('persMode').addEventListener('change', resetSim);
     $('drugMode').addEventListener('change', function () { setDrugUI(this.value, true); }); // v1.4: смена класса АБ
-    $('btnLawn').addEventListener('click', function () { E.lawn(st, 0, 1e7); render(); updateLegend(); logEvent('газон E. coli по всей чаше', 'man'); });
+    $('btnLawn').addEventListener('click', function () { E.lawn(st, 0, 1e7); render(); updateLegend(); updateSpeciesCounts(); logEvent('газон E. coli по всей чаше', 'man'); });
     $('btnBolus').addEventListener('click', function () { E.bolusAB(st, doseVal()); render(); logEvent('болюс АБ ' + (doseVal() >= 10 ? doseVal().toFixed(0) : doseVal().toFixed(1)) + '\u00a0мг/л всю чашу', 'man'); });
     $('btnTests').addEventListener('click', function () { runTests(); });
     $('micTick').textContent = 'MIC ' + E.SPECIES[0].MIC;

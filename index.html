@@ -7,6 +7,8 @@
 <meta name="description" content="Учебный симулятор чашки Петри с реальными ветеринарными патогенами: кинетика Моно, лаг-фаза по Бараньи, конкуренция видов, time-kill по Хиллу/Emax, окно селекции мутантов. Один HTML, без бэкенда.">
 <meta property="og:title" content="ВетПетри — симулятор чашки Петри">
 <meta property="og:description" content="Моно, Бараньи, Хилл/Emax, окно селекции мутантов — на реальных вет. патогенах. Для пары по микробиологии.">
+<!-- Task 223 (QA З1): инлайн-SVG-фавикон (тот же петри-диш, что в логотипе) — был единственный 404 в сети -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='9.2' fill='%230b0f14' stroke='%234dd0e1' stroke-width='1.6'/%3E%3Ccircle cx='9.5' cy='10' r='1.1' fill='%234dd0e1'/%3E%3Ccircle cx='14' cy='13.5' r='1.5' fill='%234dd0e1'/%3E%3Ccircle cx='11' cy='15.5' r='.8' fill='%234dd0e1'/%3E%3Ccircle cx='15.5' cy='8.5' r='.7' fill='%234dd0e1'/%3E%3C/svg%3E">
 <style>
 /* vet-ds — ядро ДС экосистемы (инлайн, офлайн single-file) */
 /* ==========================================================================
@@ -1877,6 +1879,7 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--tx);
 /* Task 183: тач — драг по чаше (посев/капля/ластик) не должен отдаваться скроллу страницы */
 #dish { display: block; width: 100%; height: auto; cursor: crosshair; touch-action: none; }
 .hint { position: absolute; left: 10px; top: 8px; font-size: 12px; color: var(--mut);
+  background: rgba(11,15,20,.65); /* Task 223 (QA З3): фолбэк — color-mix ниже не поддержан в Chrome<111/Safari<16.2 */
   background: color-mix(in srgb, var(--bg) 65%, transparent); padding: 3px 10px; border-radius: 10px; pointer-events: none; }
 
 .toolbar, .tools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
@@ -1892,6 +1895,7 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--tx);
 .clock { font-variant-numeric: tabular-nums; color: var(--acc); font-size: 14px; margin-left: auto; }
 
 .tool { border: 1px solid var(--line); background: var(--panel2); border-radius: 8px; padding: 5px 12px; font-size: 13px; cursor: pointer; user-select: none; }
+.tool:hover { background: #21304c; } /* Task 223 (QA П3): тот же hover, что у .btn — консистентность тулбара */
 .tool.active { border-color: var(--acc); color: var(--acc); background: #10222a; }
 
 .charts { margin-top: 10px; background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: 8px; }
@@ -1966,6 +1970,7 @@ input[type=range] { width: 100%; accent-color: var(--violet); }
 
 /* ---------- v1.1: probe, PK-бейдж, лекционные сценарии, проектор ---------- */
 .probe { position: absolute; display: none; pointer-events: none; z-index: 5;
+  background: rgba(11,15,20,.93); /* Task 223 (QA З3): фолбэк до color-mix */
   background: color-mix(in srgb, var(--bg) 93%, transparent); border: 1px solid var(--line); border-radius: 8px;
   padding: 6px 9px; font-size: 12px; line-height: 1.5; white-space: nowrap; }
 .probe .sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 3px; }
@@ -1986,7 +1991,8 @@ details.lecture .la { color: var(--ok); }
 .chron-cap { font-size: 12px; color: var(--mut); margin-bottom: 4px; }
 .chron-cap b { color: var(--tx); }
 .chron-list { max-height: 150px; overflow-y: auto; font-size: 12.5px; }
-.chron-list .ev { padding: 2.5px 0; border-top: 1px dashed color-mix(in srgb, var(--line) 55%, transparent); }
+.chron-list .ev { padding: 2.5px 0; border-top: 1px dashed rgba(34,48,71,.55); /* Task 223 (QA З3): фолбэк до color-mix */
+  border-top: 1px dashed color-mix(in srgb, var(--line) 55%, transparent); }
 .chron-list .ev:first-child { border-top: none; }
 .chron-list .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
 .dot.gr { background: var(--ok); } .dot.ab { background: var(--violet); }
@@ -2059,14 +2065,15 @@ body.projector #layerBar .tool { font-size: 15px; }
 </head>
 <body>
 <nav class="ds-hub" aria-label="Экосистема">
-  <a href="https://shray77.github.io/">Визитка</a>
-  <a href="https://shray77.github.io/vetdigest-site/">Дайджест науки</a>
-  <a href="https://shray77.github.io/vetrecall-site/">Отзывы и вспышки РФ</a>
-  <a href="https://shray77.github.io/biothreat-site/">Биоугрозы мира</a>
-  <a href="https://shray77.github.io/vet-heatmap/">ВетКарта</a>
-  <a href="https://shray77.github.io/vetflu-site/">Окна риска ВПГП</a>
-  <a href="https://shray77.github.io/rss-core-site/">Статус ядра</a>
-  <a href="https://shray77.github.io/vetfecrt-site/">ФЭКРТ</a>
+  <!-- Task 223 (QA Ш4): target=_blank — клик по хабу больше не убивает текущий прогон -->
+  <a href="https://shray77.github.io/" target="_blank" rel="noopener">Визитка</a>
+  <a href="https://shray77.github.io/vetdigest-site/" target="_blank" rel="noopener">Дайджест науки</a>
+  <a href="https://shray77.github.io/vetrecall-site/" target="_blank" rel="noopener">Отзывы и вспышки РФ</a>
+  <a href="https://shray77.github.io/biothreat-site/" target="_blank" rel="noopener">Биоугрозы мира</a>
+  <a href="https://shray77.github.io/vet-heatmap/" target="_blank" rel="noopener">ВетКарта</a>
+  <a href="https://shray77.github.io/vetflu-site/" target="_blank" rel="noopener">Окна риска ВПГП</a>
+  <a href="https://shray77.github.io/rss-core-site/" target="_blank" rel="noopener">Статус ядра</a>
+  <a href="https://shray77.github.io/vetfecrt-site/" target="_blank" rel="noopener">ФЭКРТ</a>
 </nav>
 <header class="hdr">
   <div class="hdr-title">
@@ -2202,7 +2209,7 @@ body.projector #layerBar .tool { font-size: 15px; }
     <div class="kv"><label>Seed (воспроизводимость)</label><span class="inline"><input id="seed" type="number" value="42" step="1"><button id="btnSeedRnd" class="btn sm">случайный</button></span></div>
 
     <details id="testsBox" class="box">
-      <summary>Тесты моделей (S-кривая · time-kill · seed · окно селекции · PK-инфузия · мега-чаша · экспорт · хроника · персистеры)</summary>
+      <summary>Тесты моделей (S-кривая · time-kill · seed · окно селекции · PK-инфузия · мега-чаша · экспорт · хроника · персистеры · q8h · стенка чашки)</summary>
       <button id="btnTests" class="btn">Прогнать заново</button>
       <div id="testsOut"></div>
     </details>
@@ -3454,20 +3461,35 @@ body.projector #layerBar .tool { font-size: 15px; }
   let st = null, playing = false, speed = 8, tool = { kind: 'seed', sp: 0 };
   let layer = 'biomass'; // слой чаши (F10): biomass | S | A | mu
   let history = [], lastPush = -1, frameNo = 0, curPreset = 0;
+  let pdFrozen = null; // Task 223 (QA Б1): замороженные PD-индексы первых суток — день прошёл, значение иммутабельно
   let chron = [], chronFl = null, chronDirty = false; // хроника событий (v1.2)
 
   // ---------- параметры видов из UI ----------
   // Task 184 (урок Task 178: молчаливое «самоисправление» хуже явной ошибки): «0»/мусор/
   // отрицательное значение в μmax/MIC больше не подставляет видовой дефолт ТИХО —
   // валидация с честным сообщением в hint и возвратом поля к дефолту. Ks в UI не вводится.
-  function paramOrReject(inp, def, min, what, spName) {
+  // Task 223 (SW-23 A5 / QA Б2): верхняя граница тоже валидируется — μmax=1e9 раньше
+  // принимался молча (проверялась только нижняя) и уводил q Бараньи в Infinity →
+  // тихая NaN-смерть симуляции к t≈2 ч. Потолок 12 1/ч (td ≈ 3.5 мин) — рекомендация
+  // аудита SW-23; путь через hash (sp-mu-*.value) идёт в тот же валидатор.
+  // Task 223 (QA Ш1): успешный ввод СВОЕГО поля стирает СВОЮ же ошибку из hint — раньше
+  // сообщение переживало все последующие действия (а по ходу той же валидации его
+  // не должно стирать чужое поле — поэтому помним и поле, и текст).
+  let lastParamErr = null, lastParamErrInp = null;
+  function paramOrReject(inp, def, min, what, spName, max) {
     const raw = inp.value;
     const v = parseFloat(raw);
-    if (!isFinite(v) || v < min) {
-      if ($('hint')) $('hint').textContent = 'Параметр «' + what + '» (' + spName + '): «' + raw +
-        '» не годится — нужно число ≥ ' + min + '. Вернул ' + def + '.';
+    if (!isFinite(v) || v < min || (max !== undefined && v > max)) {
+      const msg = 'Параметр «' + what + '» (' + spName + '): «' + raw + '» не годится — нужно число ≥ ' + min +
+        (max !== undefined ? ' и ≤ ' + max : '') + '. Вернул ' + def + '.';
+      lastParamErr = msg; lastParamErrInp = inp;
+      if ($('hint')) $('hint').textContent = msg;
       inp.value = def;
       return def;
+    }
+    if (lastParamErrInp === inp && $('hint') && $('hint').textContent === lastParamErr) {
+      $('hint').textContent = ''; // ошибка этого поля исправлена — убираем (QA Ш1)
+      lastParamErr = null; lastParamErrInp = null;
     }
     return v;
   }
@@ -3476,7 +3498,7 @@ body.projector #layerBar .tool { font-size: 15px; }
     for (let i = 0; i < E.SPECIES.length; i++) {
       const sp = E.SPECIES[i];
       list.push(Object.assign({}, sp, {
-        muMax: paramOrReject($('sp-mu-' + i), sp.muMax, 0.1, 'μmax', sp.name),
+        muMax: paramOrReject($('sp-mu-' + i), sp.muMax, 0.1, 'μmax', sp.name, 12),
         MIC: paramOrReject($('sp-mic-' + i), sp.MIC, 0.01, 'MIC', sp.name),
         enabled: $('sp-en-' + i).checked,
       }));
@@ -3758,13 +3780,20 @@ body.projector #layerBar .tool { font-size: 15px; }
   function updatePKBadge() {
     const el = $('pkBadge');
     if (!el) return;
-    if ((curPreset !== 2 && curPreset !== 6) || !st || !history.length) { el.style.display = 'none'; return; }
+    // Task 223 (QA Б1): скрытие бейджа очищает и текст — в DOM оставался мусорный «98%»
+    if ((curPreset !== 2 && curPreset !== 6) || !st || !history.length) { el.style.display = 'none'; el.textContent = ''; return; }
     const mic = st.species[0].MIC;
+    // Task 223 (QA Б1): сутки прошли — индексы первых суток ЗАМОРАЖЕНЫ. Прореживание
+    // history (кап 2600, filter i%2===0) на длинных прогонах огрубляло первые 24 ч
+    // (точек в окне становилось < 2), и бейдж дрейфовал задним числом 23→27→«98%»
+    // с последующим исчезновением. Считаем ОДИН раз из полной истории — день прошёл,
+    // значение иммутабельно (эталон по движку для пресета 3 при 257 мг/л ≈ 25%).
+    if (pdFrozen === null && st.t > 24.0001) pdFrozen = E.pdIndices(history, mic);
+    const pi = pdFrozen || E.pdIndices(history, mic);
     const modeName = $('doseMode').value;
     const modeLabel = modeName === 'bolus' ? '1 болюс' : modeName === 'q8h' ? '3 введения' : 'инфузия';
     if (st.drugId === 'enro') {
-      const pi = E.pdIndices(history, mic);
-      if (!pi) { el.style.display = 'none'; return; }
+      if (!pi) { el.style.display = 'none'; el.textContent = ''; return; }
       el.style.display = '';
       const aucOk = pi.aucMic >= 100; // фторхинолоны: ≥ 100–125 для грамотрицательных
       el.textContent = 'AUC24/MIC: ' + pi.aucMic.toFixed(0) + ' [цель ≥ 125] · Cmax/MIC: ' +
@@ -3773,8 +3802,7 @@ body.projector #layerBar .tool { font-size: 15px; }
     } else {
       // Task 184: T>MIC — как и AUC-бейдж выше, из E.pdIndices (линейные пересечения порога),
       // а не поточечный подсчёт доли записей истории
-      const pi = E.pdIndices(history, mic);
-      if (!pi) { el.style.display = 'none'; return; }
+      if (!pi) { el.style.display = 'none'; el.textContent = ''; return; }
       el.style.display = '';
       el.textContent = 'T>MIC (0–24\u00a0ч): ' + (pi.fTMIC * 100).toFixed(0) + '% [' + modeLabel +
         '] · цель для β-лактамов 40–70%';
@@ -3794,7 +3822,7 @@ body.projector #layerBar .tool { font-size: 15px; }
   function resetSim() {
     st = buildState();
     PRESETS[curPreset].setup(st);
-    history = []; lastPush = -1;
+    history = []; lastPush = -1; pdFrozen = null;
     chron = []; chronFl = E.chronFlags(); chronDirty = false;
     playing = false; $('btnPlay').textContent = '\u25b6 Пуск';
     for (let i = 0; i < 4; i++) { const row = $('sprow-' + i); if (row) row.classList.toggle('sp-off', !st.enabled[i]); }
@@ -4239,7 +4267,7 @@ body.projector #layerBar .tool { font-size: 15px; }
         }
       logEvent('стёрты колонии.', 'man');
     }
-    render(); updateLegend();
+    render(); updateLegend(); updateSpeciesCounts(); // Task 223 (QA Ш3): счётчики видов — сразу, не ждать 700-мс тика
   }
   dish.addEventListener('pointerdown', function (ev) { dragging = true; applyTool(ev); });
   window.addEventListener('pointermove', function (ev) { if (dragging) applyTool(ev); });
@@ -4350,7 +4378,7 @@ body.projector #layerBar .tool { font-size: 15px; }
     location.hash = lastHashWritten.slice(1);
     const url = location.href;
     const done = function () {
-      $('hint').textContent = 'Ссылка со сценарием — в адресной строке; скопируй и передай студентам';
+      $('hint').textContent = 'Ссылка-сценарий — в адресной строке; скопируй и передай студентам';
     };
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, done);
     else done();
@@ -4411,6 +4439,11 @@ body.projector #layerBar .tool { font-size: 15px; }
     $('btnReset').addEventListener('click', resetSim);
     $('selSpeed').addEventListener('change', function () { speed = parseFloat(this.value); });
     $('dose').addEventListener('input', updateDoseUI);
+    // Task 223 (QA Ш2): в пресетах 3 и 7 доза кормит сам прогон (initDose при сбросе) —
+    // смена слайдера сбрасывает прогон, как kel/S0/pMut/seed/μmax/MIC: панель больше не
+    // «врёт» («показывает 257, а симулируется 4»). В песочнице (5) слайдер остаётся
+    // органом будущих действий (капля/болюс) — сброс убил бы прогон посреди игры.
+    $('dose').addEventListener('change', function () { if (curPreset === 2 || curPreset === 6) resetSim(); });
     $('doseMode').addEventListener('change', resetSim);
     $('kel').addEventListener('change', resetSim);
     $('S0').addEventListener('change', resetSim);
@@ -4435,7 +4468,7 @@ body.projector #layerBar .tool { font-size: 15px; }
     });
     $('persMode').addEventListener('change', resetSim);
     $('drugMode').addEventListener('change', function () { setDrugUI(this.value, true); }); // v1.4: смена класса АБ
-    $('btnLawn').addEventListener('click', function () { E.lawn(st, 0, 1e7); render(); updateLegend(); logEvent('газон E. coli по всей чаше', 'man'); });
+    $('btnLawn').addEventListener('click', function () { E.lawn(st, 0, 1e7); render(); updateLegend(); updateSpeciesCounts(); logEvent('газон E. coli по всей чаше', 'man'); });
     $('btnBolus').addEventListener('click', function () { E.bolusAB(st, doseVal()); render(); logEvent('болюс АБ ' + (doseVal() >= 10 ? doseVal().toFixed(0) : doseVal().toFixed(1)) + '\u00a0мг/л всю чашу', 'man'); });
     $('btnTests').addEventListener('click', function () { runTests(); });
     $('micTick').textContent = 'MIC ' + E.SPECIES[0].MIC;
